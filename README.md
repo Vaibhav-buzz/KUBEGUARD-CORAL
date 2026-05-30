@@ -52,10 +52,11 @@ Do not open `D:\test\terra\index.html` directly when you want live data. Direct 
 
 Inside the UI, open **Coral Workspace** and use:
 
-- **Save** to store GitHub owner, repository, PR number, and service in the browser.
+- **Save** to store GitHub owner and repository in the browser.
 - **Load Live Data** to refresh Coral tables, Datadog rows, and GitHub PRs.
 - **Discover Tables** to run the live `coral.tables` inventory.
-- **Load GitHub PRs** to load pull requests from your repo.
+- **Load GitHub PRs** to populate the PR-number dropdown from real pull requests in your repo.
+- **Service** is populated from `service:*` GitHub labels plus live service hints from Datadog, Sentry, and Linear.
 - **Run Coral JOIN** to execute `coral/queries/risk_score.sql` for the selected PR.
 
 The live server exposes:

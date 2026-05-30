@@ -10,6 +10,7 @@ const state = {
   datadog: { hosts: [], monitors: [], metricNames: [], services: [], incidents: [], errors: [] },
   sentry: { issues: [], error: "" },
   linear: { issues: [], error: "" },
+  serviceOptions: [],
   selectedPr: null,
   lastRiskRows: []
 };
@@ -79,8 +80,7 @@ function saveStoredConfig() {
 function fillConfigForm() {
   if (qs("#live-owner")) qs("#live-owner").value = state.config.owner || "";
   if (qs("#live-repo")) qs("#live-repo").value = state.config.repo || "";
-  if (qs("#live-pr-number")) qs("#live-pr-number").value = state.config.prNumber || "";
-  if (qs("#live-service")) qs("#live-service").value = state.config.service || "payments";
+  syncLiveSelects();
 }
 
 function readConfigFromForm() {
@@ -88,7 +88,7 @@ function readConfigFromForm() {
     owner: qs("#live-owner")?.value.trim() || "",
     repo: qs("#live-repo")?.value.trim() || "",
     prNumber: qs("#live-pr-number")?.value.trim() || "",
-    service: qs("#live-service")?.value.trim() || "payments"
+    service: qs("#live-service")?.value.trim() || ""
   };
   saveStoredConfig();
   return state.config;
@@ -102,6 +102,72 @@ function queryFromConfig(extra = {}) {
   if (config.prNumber) params.set("pr_number", config.prNumber);
   if (config.service) params.set("service", config.service);
   return params.toString();
+}
+
+function labelsFromRow(row) {
+  const raw = firstValue(row, ["label_names", "labels"], "");
+  if (Array.isArray(raw)) return raw.map((item) => typeof item === "string" ? item : item?.name).filter(Boolean);
+  return String(raw)
+    .split(/[,|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function serviceFromLabels(row) {
+  return labelsFromRow(row)
+    .map((name) => String(name).match(/^service:(.+)$/i)?.[1])
+    .find(Boolean) || "";
+}
+
+function addOptionValue(values, value) {
+  const clean = String(value || "").trim();
+  if (clean && !values.includes(clean)) values.push(clean);
+}
+
+function deriveServiceOptions() {
+  const values = [];
+  state.serviceOptions.forEach((item) => addOptionValue(values, item));
+  state.pulls.forEach((pr) => addOptionValue(values, pr.service));
+  (state.datadog.services || []).forEach((service) => {
+    addOptionValue(values, firstValue(service, ["service", "name", "env", "tag_service"], ""));
+  });
+  (state.sentry.issues || []).forEach((issue) => {
+    addOptionValue(values, firstValue(issue, ["project", "project__slug", "project_slug"], ""));
+  });
+  (state.linear.issues || []).forEach((issue) => {
+    const labels = firstValue(issue, ["label__names", "labels"], "");
+    String(labels).split(/[,|;]/).forEach((label) => addOptionValue(values, String(label).replace(/^service:/i, "")));
+  });
+  addOptionValue(values, state.config.service);
+  return values.sort((a, b) => a.localeCompare(b));
+}
+
+function syncSelect(selector, placeholder, options, value, renderLabel = (item) => item) {
+  const select = qs(selector);
+  if (!select) return;
+  const allOptions = [...options];
+  if (value && !allOptions.some((item) => String(item.value ?? item) === String(value))) {
+    allOptions.unshift({ value, label: value });
+  }
+  select.innerHTML = `<option value="">${placeholder}</option>` + allOptions
+    .map((item) => {
+      const optionValue = String(item.value ?? item);
+      const label = renderLabel(item);
+      return `<option value="${escapeHtml(optionValue)}">${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  select.value = value || "";
+}
+
+function syncLiveSelects() {
+  syncSelect(
+    "#live-pr-number",
+    state.pulls.length ? "Select PR" : "No PRs loaded",
+    state.pulls.map((pr) => ({ value: String(pr.number), label: `#${pr.number} ${pr.title}` })),
+    state.config.prNumber,
+    (item) => item.label
+  );
+  syncSelect("#live-service", deriveServiceOptions().length ? "Select service" : "No services loaded", deriveServiceOptions(), state.config.service);
 }
 
 async function fetchJson(url) {
@@ -215,7 +281,7 @@ function normalizePull(row, index) {
   const title = firstValue(row, ["title", "pr_title"], `Pull request ${index + 1}`);
   const branch = firstValue(row, ["head__ref", "branch"], "unknown");
   const target = firstValue(row, ["base__ref", "target"], "main");
-  const service = state.config.service || inferService(`${title} ${branch}`);
+  const service = firstValue(row, ["service", "tag_service"], "") || serviceFromLabels(row) || state.config.service || inferService(`${title} ${branch}`);
 
   return {
     number: Number(firstValue(row, ["number", "pr_number"], index + 1)),
@@ -234,6 +300,15 @@ function normalizePull(row, index) {
     datadog: Number(datadog.toFixed ? datadog.toFixed(2) : datadog),
     linear
   };
+}
+
+function applyPullSelection() {
+  const selected = state.pulls.find((pr) => String(pr.number) === String(state.config.prNumber)) || state.pulls[0] || null;
+  state.selectedPr = selected;
+  if (selected) {
+    state.config.prNumber = String(selected.number);
+    if (selected.service && !state.config.service) state.config.service = selected.service;
+  }
 }
 
 function inferService(text) {
@@ -509,6 +584,7 @@ function renderLiveDatadog() {
 }
 
 function renderAll() {
+  syncLiveSelects();
   renderMetrics();
   renderPrTables();
   renderLegend();
@@ -586,8 +662,10 @@ async function loadLiveData() {
   else addLog(linear.status === "fulfilled" ? (linear.value.error || "Linear returned no rows.") : linear.reason.message);
 
   if (pulls.status === "fulfilled" && pulls.value.ok) {
+    state.serviceOptions = [...new Set([...(state.serviceOptions || []), ...(pulls.value.services || [])])];
     state.pulls = rowsFromPayload(pulls.value).map(normalizePull);
-    state.selectedPr = state.pulls[0] || null;
+    applyPullSelection();
+    saveStoredConfig();
     addLog(`Loaded ${state.pulls.length} GitHub PRs via ${pulls.value.mode || "live API"}.`);
   } else {
     addLog(pulls.status === "fulfilled" ? (pulls.value.error || pulls.value.message || "GitHub returned no PR rows.") : pulls.reason.message);
@@ -613,12 +691,10 @@ async function loadLivePulls() {
   const pulls = await fetchJson(`/api/live/github/pulls?${queryFromConfig()}`);
   if (!pulls.ok) throw new Error(pulls.error || pulls.message || "Failed to load GitHub PRs.");
   state.pulls = rowsFromPayload(pulls).map(normalizePull);
-  state.selectedPr = state.pulls[0] || null;
-  if (state.selectedPr && !state.config.prNumber) {
-    state.config.prNumber = String(state.selectedPr.number);
-    fillConfigForm();
-    saveStoredConfig();
-  }
+  state.serviceOptions = [...new Set([...(state.serviceOptions || []), ...(pulls.services || [])])];
+  applyPullSelection();
+  fillConfigForm();
+  saveStoredConfig();
   setWorkflowStep("join");
   addLog(`Loaded ${state.pulls.length} GitHub PRs via ${pulls.mode || "live API"}.`);
   renderAll();
@@ -726,6 +802,15 @@ function bindEvents() {
     renderIncidents();
   });
   qs("#time-range").addEventListener("change", () => toast("Time range will apply when a historical live source is connected."));
+  qs("#live-pr-number").addEventListener("change", (event) => {
+    if (event.target.value) selectPr(event.target.value);
+    else readConfigFromForm();
+  });
+  qs("#live-service").addEventListener("change", () => {
+    readConfigFromForm();
+    if (state.selectedPr) state.selectedPr = { ...state.selectedPr, service: state.config.service || state.selectedPr.service };
+    renderAll();
+  });
   qs("#sync-now").addEventListener("click", () => void runAction("sync"));
   qs("#ask-ai").addEventListener("click", () => {
     setActiveView("recommendations");

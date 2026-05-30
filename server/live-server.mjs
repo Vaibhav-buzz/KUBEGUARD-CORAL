@@ -114,13 +114,23 @@ async function coralSql(sql) {
 }
 
 async function requestJson(url, headers = {}) {
-  const response = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-      "User-Agent": "KubeGuard-Demo",
-      ...headers
-    }
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "KubeGuard-Demo",
+        ...headers
+      }
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      body: null,
+      error: error.message || "Network request failed"
+    };
+  }
   const text = await response.text();
   let body;
   try {
@@ -136,42 +146,81 @@ async function requestJson(url, headers = {}) {
   };
 }
 
-async function githubPullsFallback(owner, repo) {
+function githubHeaders() {
   const headers = {};
   if (process.env.GITHUB_TOKEN) {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
-  const result = await requestJson(`https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=10`, headers);
+  return headers;
+}
+
+function labelNames(labels) {
+  if (!Array.isArray(labels)) return [];
+  return labels
+    .map((label) => typeof label === "string" ? label : label?.name)
+    .filter(Boolean);
+}
+
+function servicesFromLabels(labels) {
+  return labelNames(labels)
+    .map((name) => String(name).match(/^service:(.+)$/i)?.[1])
+    .filter(Boolean);
+}
+
+async function githubRepoServices(owner, repo) {
+  const result = await requestJson(`https://api.github.com/repos/${owner}/${repo}/labels?per_page=100`, githubHeaders());
+  if (!result.ok || !Array.isArray(result.body)) return [];
+  return servicesFromLabels(result.body);
+}
+
+async function githubIssueLabels(owner, repo, issueNumber) {
+  const result = await requestJson(`https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, githubHeaders());
+  if (!result.ok || !result.body || typeof result.body !== "object") return [];
+  return labelNames(result.body.labels || []);
+}
+
+async function githubPullsFallback(owner, repo) {
+  const headers = githubHeaders();
+  const result = await requestJson(`https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=20`, headers);
   if (!result.ok || !Array.isArray(result.body)) {
     return {
       ok: false,
       rows: [],
+      services: [],
       error: result.error || `GitHub REST returned ${result.status}`
     };
   }
 
-  const rows = result.body.map((pull) => ({
-    number: pull.number,
-    title: pull.title,
-    state: pull.state,
-    user__login: pull.user?.login || "",
-    head__ref: pull.head?.ref || "",
-    base__ref: pull.base?.ref || "",
-    additions: 0,
-    deletions: 0,
-    changed_files: 0,
-    updated_at: pull.updated_at,
-    html_url: pull.html_url
+  const rows = await Promise.all(result.body.map(async (pull) => {
+    const [detail, issueLabels] = await Promise.all([
+      requestJson(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull.number}`, headers),
+      githubIssueLabels(owner, repo, pull.number)
+    ]);
+    const detailBody = detail.ok && detail.body && typeof detail.body === "object" ? detail.body : {};
+    const labels = [...new Set([...labelNames(pull.labels || []), ...issueLabels, ...labelNames(detailBody.labels || [])])];
+    return {
+      number: pull.number,
+      title: pull.title,
+      state: pull.state,
+      user__login: pull.user?.login || "",
+      head__ref: pull.head?.ref || "",
+      base__ref: pull.base?.ref || "",
+      additions: Number(detailBody.additions || 0),
+      deletions: Number(detailBody.deletions || 0),
+      changed_files: Number(detailBody.changed_files || 0),
+      updated_at: pull.updated_at,
+      html_url: pull.html_url,
+      label_names: labels.join(","),
+      service: servicesFromLabels(labels)[0] || ""
+    };
   }));
 
-  return { ok: true, rows };
+  const services = [...new Set([...(await githubRepoServices(owner, repo)), ...rows.flatMap((row) => row.service ? [row.service] : [])])].sort();
+  return { ok: true, rows, services };
 }
 
 async function githubPullDetailFallback(owner, repo, prNumber) {
-  const headers = {};
-  if (process.env.GITHUB_TOKEN) {
-    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-  }
+  const headers = githubHeaders();
   const result = await requestJson(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, headers);
   if (!result.ok || !result.body || typeof result.body !== "object") {
     return {
@@ -180,6 +229,8 @@ async function githubPullDetailFallback(owner, repo, prNumber) {
       error: result.error || `GitHub REST returned ${result.status}`
     };
   }
+  const issueLabels = await githubIssueLabels(owner, repo, prNumber);
+  const labels = [...new Set([...labelNames(result.body.labels || []), ...issueLabels])];
   return {
     ok: true,
     row: {
@@ -191,7 +242,9 @@ async function githubPullDetailFallback(owner, repo, prNumber) {
       open_sentry_issues: 0,
       highest_sentry_event_count: 0,
       avg_error_rate_pct: 0,
-      open_linear_bugs: 0
+      open_linear_bugs: 0,
+      label_names: labels.join(","),
+      service: servicesFromLabels(labels)[0] || ""
     }
   };
 }
@@ -314,6 +367,7 @@ async function handleApi(req, res, url) {
     `;
     const result = await coralSql(sql);
     if (result.ok && Array.isArray(result.data) && result.data.length) {
+      const services = await githubRepoServices(owner, repo);
       return json(res, 200, {
         ok: true,
         mode: "coral",
@@ -321,6 +375,7 @@ async function handleApi(req, res, url) {
         owner,
         repo,
         rows: result.data,
+        services,
         raw: result.stdout,
         error: ""
       });
@@ -334,6 +389,7 @@ async function handleApi(req, res, url) {
       owner,
       repo,
       rows: fallback.rows || [],
+      services: fallback.services || [],
       raw: result.stdout,
       error: fallback.ok ? (result.stderr || result.error || "Coral returned no PR rows; using GitHub REST fallback.") : (result.stderr || result.error || fallback.error),
       fallbackError: fallback.error || ""

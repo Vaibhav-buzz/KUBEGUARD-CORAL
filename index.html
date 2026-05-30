@@ -220,11 +220,15 @@
                 </label>
                 <label>
                   <span>PR number</span>
-                  <input id="live-pr-number" type="number" min="1" placeholder="1" />
+                  <select id="live-pr-number">
+                    <option value="">Load PRs</option>
+                  </select>
                 </label>
                 <label>
                   <span>Service</span>
-                  <input id="live-service" type="text" placeholder="payments" />
+                  <select id="live-service">
+                    <option value="">Load services</option>
+                  </select>
                 </label>
                 <button class="primary-button" data-action="save-live-config">Save</button>
               </div>

@@ -998,7 +998,8 @@ tbody tr:hover {
   font-size: 12px;
 }
 
-.live-config input {
+.live-config input,
+.live-config select {
   width: 100%;
   height: 38px;
   padding: 0 10px;
@@ -1009,7 +1010,8 @@ tbody tr:hover {
   color: var(--text);
 }
 
-.live-config input:focus {
+.live-config input:focus,
+.live-config select:focus {
   border-color: rgba(127, 92, 255, 0.68);
 }
 
