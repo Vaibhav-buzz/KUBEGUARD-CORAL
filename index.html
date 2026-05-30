@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KubeGuard Deployment Intelligence</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <div class="brand-mark">KG</div>
+          <div>
+            <strong>KubeGuard</strong>
+            <span>Deployment Intelligence</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="overview">
+            <span class="nav-icon">OV</span>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" data-view="pulls">
+            <span class="nav-icon">PR</span>
+            <span>Pull Requests</span>
+          </button>
+          <button class="nav-item" data-view="health">
+            <span class="nav-icon">SH</span>
+            <span>Service Health</span>
+          </button>
+          <button class="nav-item" data-view="incidents">
+            <span class="nav-icon">IN</span>
+            <span>Incident Signals</span>
+          </button>
+          <button class="nav-item" data-view="recommendations">
+            <span class="nav-icon">AI</span>
+            <span>AI Recommendations</span>
+          </button>
+          <button class="nav-item" data-view="gates">
+            <span class="nav-icon">GT</span>
+            <span>Policies &amp; Gates</span>
+          </button>
+          <button class="nav-item" data-view="analytics">
+            <span class="nav-icon">AN</span>
+            <span>Trends &amp; Analytics</span>
+          </button>
+          <button class="nav-item" data-view="map">
+            <span class="nav-icon">SM</span>
+            <span>Service Map</span>
+          </button>
+          <button class="nav-item" data-view="coral">
+            <span class="nav-icon">CO</span>
+            <span>Coral Workspace</span>
+          </button>
+          <button class="nav-item" data-view="integrations">
+            <span class="nav-icon">IG</span>
+            <span>Integrations</span>
+          </button>
+          <button class="nav-item" data-view="admin">
+            <span class="nav-icon">AD</span>
+            <span>Administration</span>
+          </button>
+        </nav>
+
+        <div class="shortcut-block">
+          <p>Shortcuts</p>
+          <button class="shortcut" data-view="gates">Risk Center <span>5</span></button>
+          <button class="shortcut" data-view="pulls">Blocked PRs <span>5</span></button>
+          <button class="shortcut" data-view="incidents">Incidents <span>12</span></button>
+          <button class="shortcut" data-view="analytics">Reports</button>
+        </div>
+
+        <div class="profile-card">
+          <div class="avatar">SJ</div>
+          <div>
+            <strong id="profile-name">Live session</strong>
+            <span id="profile-team">Waiting for repo</span>
+          </div>
+          <button class="ghost-icon" aria-label="Open user menu">v</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Deployment risk control plane</p>
+            <h1 id="page-title">Deployment Intelligence Hub</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-box" for="global-search">
+              <input id="global-search" type="search" placeholder="Search services, PRs, incidents..." />
+              <span>Search</span>
+            </label>
+            <button class="icon-button with-badge" aria-label="Notifications">
+              BL
+              <span>12</span>
+            </button>
+            <button class="icon-button" aria-label="Help">?</button>
+            <button class="ai-button" id="ask-ai">Ask AI</button>
+          </div>
+        </header>
+
+        <section class="toolbar">
+          <label for="time-range">Time Range:</label>
+          <select id="time-range">
+            <option>Last 24 hours</option>
+            <option>Last 7 days</option>
+            <option>Last 30 days</option>
+          </select>
+          <button class="secondary-button" id="sync-now">Sync sources</button>
+          <span class="sync-pill">Last synced: <strong id="sync-time">1m ago</strong></span>
+        </section>
+
+        <section class="live-banner" id="live-banner">
+          <span class="live-dot static" id="live-dot"></span>
+          <div>
+            <strong id="live-title">Live mode not connected</strong>
+            <span id="live-detail">Run the live server and open localhost to connect Coral, Datadog, GitHub, Sentry, and Linear.</span>
+          </div>
+          <button class="secondary-button" data-view-jump="coral">Configure Live</button>
+        </section>
+
+        <section class="view-panel active" data-panel="overview">
+          <div class="metric-grid" id="metric-grid"></div>
+
+          <div class="dashboard-grid">
+            <section class="panel panel-large">
+              <div class="panel-header">
+                <h2>Top Risky Pull Requests</h2>
+                <button class="secondary-button" data-view-jump="pulls">View All PRs</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>PR</th>
+                      <th>Service</th>
+                      <th>Risk Score</th>
+                      <th>Risk Level</th>
+                      <th>Updated</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pr-table"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Risk Score Distribution</h2>
+              </div>
+              <div class="donut-wrap">
+                <div class="donut" aria-label="Risk score distribution">
+                  <span id="distribution-total">--</span>
+                  <small>Total PRs</small>
+                </div>
+                <div class="legend" id="risk-legend"></div>
+              </div>
+              <button class="link-button" data-view-jump="analytics">View all</button>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Recently Updated Incidents</h2>
+                <button class="secondary-button" data-view-jump="incidents">View All Incidents</button>
+              </div>
+              <div class="incident-list" id="incident-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Risk Trend <span>(Avg Score)</span></h2>
+                <select class="compact-select" id="trend-range">
+                  <option>Last 7 days</option>
+                  <option>Last 30 days</option>
+                </select>
+              </div>
+              <div class="trend-chart" id="trend-chart"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Top Risky Services</h2>
+                <button class="secondary-button" data-view-jump="health">View All Services</button>
+              </div>
+              <div class="service-bars" id="service-bars"></div>
+            </section>
+
+            <section class="panel recommendation-panel">
+              <div class="panel-header">
+                <h2>AI Recommendation</h2>
+              </div>
+              <div id="recommendation-card" class="recommendation-card"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view-panel" data-panel="coral">
+          <div class="split-layout">
+            <section class="panel panel-large">
+              <div class="panel-header">
+                <div>
+                  <h2>Coral Control Plane</h2>
+                  <p>One SQL interface for GitHub, Sentry, Datadog, Linear, and future sources.</p>
+                </div>
+                <button class="primary-button" data-action="load-live">Load Live Data</button>
+              </div>
+
+              <div class="live-config">
+                <label>
+                  <span>GitHub owner</span>
+                  <input id="live-owner" type="text" placeholder="your-user-or-org" />
+                </label>
+                <label>
+                  <span>Repository</span>
+                  <input id="live-repo" type="text" placeholder="your-demo-repo" />
+                </label>
+                <label>
+                  <span>PR number</span>
+                  <input id="live-pr-number" type="number" min="1" placeholder="1" />
+                </label>
+                <label>
+                  <span>Service</span>
+                  <input id="live-service" type="text" placeholder="payments" />
+                </label>
+                <button class="primary-button" data-action="save-live-config">Save</button>
+              </div>
+
+              <div class="live-summary-grid">
+                <article>
+                  <span>Coral</span>
+                  <strong id="live-coral-status">Checking</strong>
+                </article>
+                <article>
+                  <span>Tables</span>
+                  <strong id="live-table-count">0</strong>
+                </article>
+                <article>
+                  <span>Datadog</span>
+                  <strong id="live-datadog-count">0 rows</strong>
+                </article>
+                <article>
+                  <span>GitHub PRs</span>
+                  <strong id="live-pr-count">0</strong>
+                </article>
+              </div>
+
+              <div class="source-grid" id="source-grid"></div>
+
+              <div class="workflow-steps" id="workflow-steps">
+                <div class="workflow-step active" data-step="discover">
+                  <span>01</span>
+                  <strong>Discover tables</strong>
+                  <small>coral.tables inventory</small>
+                </div>
+                <div class="workflow-step" data-step="join">
+                  <span>02</span>
+                  <strong>Run SQL join</strong>
+                  <small>github + sentry + datadog + linear</small>
+                </div>
+                <div class="workflow-step" data-step="score">
+                  <span>03</span>
+                  <strong>Compute score</strong>
+                  <small>weighted 0-100 risk</small>
+                </div>
+                <div class="workflow-step" data-step="comment">
+                  <span>04</span>
+                  <strong>Format comment</strong>
+                  <small>clear PR recommendation</small>
+                </div>
+                <div class="workflow-step" data-step="gate">
+                  <span>05</span>
+                  <strong>Apply gate</strong>
+                  <small>block critical merges</small>
+                </div>
+              </div>
+
+              <div class="control-row">
+                <button class="secondary-button" data-action="discover">Discover Tables</button>
+                <button class="secondary-button" data-action="load-pulls">Load GitHub PRs</button>
+                <button class="secondary-button" data-action="run-query">Run Coral JOIN</button>
+                <button class="secondary-button" data-action="score">Compute Score</button>
+                <button class="secondary-button" data-action="comment">Preview Comment</button>
+                <button class="secondary-button" data-action="gate">Evaluate Gate</button>
+              </div>
+
+              <div class="live-data-grid">
+                <section class="live-data-card">
+                  <h3>Live Coral Tables</h3>
+                  <div id="live-tables-list" class="compact-list"></div>
+                </section>
+                <section class="live-data-card">
+                  <h3>Live Datadog Snapshot</h3>
+                  <div id="live-datadog-list" class="compact-list"></div>
+                </section>
+                <section class="live-data-card">
+                  <h3>Live Query Result</h3>
+                  <pre id="live-query-result" class="mini-code">No live query has run yet.</pre>
+                </section>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>SQL Preview</h2>
+                <span class="status-pill ready">Ready</span>
+              </div>
+              <pre class="code-preview" id="sql-preview"></pre>
+            </section>
+          </div>
+
+          <div class="split-layout lower">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Operation Log</h2>
+                <button class="secondary-button" id="clear-log">Clear</button>
+              </div>
+              <div class="operation-log" id="operation-log"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>PR Comment Preview</h2>
+                <span class="status-pill blocked">Critical</span>
+              </div>
+              <div class="comment-preview" id="comment-preview"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view-panel" data-panel="pulls">
+          <section class="panel panel-full">
+            <div class="panel-header">
+              <div>
+                <h2>Pull Request Risk Queue</h2>
+                <p>Inspect, score, comment, and gate each deployment candidate.</p>
+              </div>
+              <button class="primary-button" data-action="run-query">Score Selected PR</button>
+            </div>
+            <div class="table-wrap tall">
+              <table>
+                <thead>
+                  <tr>
+                    <th>PR</th>
+                    <th>Branch</th>
+                    <th>Service</th>
+                    <th>Signals</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="pulls-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="health">
+          <div class="service-health-grid" id="service-health-grid"></div>
+        </section>
+
+        <section class="view-panel" data-panel="incidents">
+          <section class="panel panel-full">
+            <div class="panel-header">
+              <h2>Incident Signals</h2>
+              <button class="secondary-button" data-action="sync">Refresh Incidents</button>
+            </div>
+            <div class="incident-board" id="incident-board"></div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="recommendations">
+          <section class="panel panel-full recommendation-panel">
+            <div class="panel-header">
+              <div>
+                <h2>AI Recommendations</h2>
+                <p>Actionable next steps derived from the Coral query result.</p>
+              </div>
+              <button class="primary-button" id="generate-recommendation">Generate Recommendation</button>
+            </div>
+            <div class="recommendation-grid" id="recommendation-grid"></div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="gates">
+          <div class="gate-layout">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Merge Gate Controls</h2>
+                <span class="status-pill blocked">Blocking enabled</span>
+              </div>
+              <div class="gate-controls">
+                <label class="toggle-row">
+                  <input type="checkbox" checked />
+                  <span>Fail workflow when verdict is CRITICAL</span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" checked />
+                  <span>Require risk-score status check on main</span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" checked />
+                  <span>Post PR comment after each score</span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" />
+                  <span>Notify Slack for high and critical PRs</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Thresholds</h2>
+                <button class="secondary-button" data-action="gate">Evaluate Now</button>
+              </div>
+              <div class="thresholds">
+                <div><span>Low</span><strong>0-19</strong></div>
+                <div><span>Medium</span><strong>20-44</strong></div>
+                <div><span>High</span><strong>45-69</strong></div>
+                <div><span>Critical</span><strong>70-100</strong></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view-panel" data-panel="analytics">
+          <section class="panel panel-full">
+            <div class="panel-header">
+              <h2>Trends &amp; Analytics</h2>
+              <button class="secondary-button" data-action="sync">Refresh</button>
+            </div>
+            <div class="analytics-grid">
+              <div class="chart-card" id="analytics-trend"></div>
+              <div class="chart-card" id="analytics-distribution"></div>
+              <div class="chart-card" id="analytics-services"></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="map">
+          <section class="panel panel-full">
+            <div class="panel-header">
+              <h2>Service Map</h2>
+              <span class="status-pill ready">Live topology</span>
+            </div>
+            <div class="service-map" id="service-map"></div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="integrations">
+          <div class="integration-grid" id="integration-grid"></div>
+        </section>
+
+        <section class="view-panel" data-panel="admin">
+          <section class="panel panel-full">
+            <div class="panel-header">
+              <h2>Administration</h2>
+              <span class="status-pill ready">Configured</span>
+            </div>
+            <div class="admin-grid">
+              <div class="admin-card">
+                <h3>Secrets</h3>
+                <p>GitHub, Sentry, Datadog, Linear, and live repository settings are loaded from `.env`.</p>
+              </div>
+              <div class="admin-card">
+                <h3>Branch Protection</h3>
+                <p>The required `risk-score` check blocks merges when the gate fails.</p>
+              </div>
+              <div class="admin-card">
+                <h3>Audit Trail</h3>
+                <p>Every simulated action is recorded in the operation log.</p>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./src/data.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>

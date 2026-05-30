@@ -1,0 +1,70 @@
+name: linear
+version: 0.1.0
+dsl_version: 3
+backend: http
+
+inputs:
+  LINEAR_API_KEY:
+    kind: secret
+    hint: >
+      Create a personal API key with read permission in Linear settings.
+
+base_url: "https://api.linear.app"
+
+auth:
+  type: HeaderAuth
+  headers:
+    - name: Authorization
+      from: template
+      template: "{{input.LINEAR_API_KEY}}"
+
+test_queries:
+  - SELECT id, title, state__name FROM linear.issues LIMIT 1
+
+tables:
+  - name: issues
+    description: >
+      Linear issues, including bugs, tasks, and features. Use this to find
+      open high-priority bugs assigned to a service label.
+    request:
+      method: GET
+      path: /v1/issues
+    response:
+      rows_path:
+        - data
+        - nodes
+    pagination:
+      mode: cursor
+      cursor_path:
+        - data
+        - pageInfo
+        - endCursor
+      has_next_path:
+        - data
+        - pageInfo
+        - hasNextPage
+      page_size:
+        default: 50
+        max: 100
+        query_param: first
+    columns:
+      - name: id
+        type: Utf8
+      - name: title
+        type: Utf8
+      - name: description
+        type: Utf8
+      - name: priority
+        type: Int64
+      - name: state__name
+        type: Utf8
+      - name: team__name
+        type: Utf8
+      - name: label__names
+        type: Utf8
+      - name: created_at
+        type: Utf8
+      - name: updated_at
+        type: Utf8
+      - name: url
+        type: Utf8

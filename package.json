@@ -1,0 +1,21 @@
+{
+  "name": "kubeguard-deployment-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "High-level deployment risk scoring workflow UI powered by Coral, GitHub, Sentry, Datadog, and Linear.",
+  "scripts": {
+    "start": "node server/live-server.mjs",
+    "serve": "node server/live-server.mjs"
+  },
+  "keywords": [
+    "deployment-risk",
+    "coral",
+    "github",
+    "sentry",
+    "datadog",
+    "linear",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "MIT"
+}

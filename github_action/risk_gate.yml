@@ -1,0 +1,64 @@
+name: Deployment Risk Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  risk-score:
+    name: Score deployment risk
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Coral
+        run: curl -fsSL https://withcoral.com/install.sh | sh
+
+      - name: Add Coral sources
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APPLICATION_KEY: ${{ secrets.DD_APPLICATION_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          coral source add github
+          coral source add sentry
+          coral source add datadog
+          coral source add --file ./coral/sources/linear.yaml
+
+      - name: Detect service from PR labels
+        id: service
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SERVICE=$(gh pr view "${{ github.event.pull_request.number }}" \
+            --json labels \
+            --jq '.labels[].name | select(startswith("service:")) | ltrimstr("service:")' \
+            | head -1)
+          echo "name=${SERVICE:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run risk scorer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          SERVICE_NAME: ${{ steps.service.outputs.name }}
+        run: python agent/run_agent.py
