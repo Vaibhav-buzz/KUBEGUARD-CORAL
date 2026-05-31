@@ -762,6 +762,77 @@ tbody tr:hover {
   border-radius: 50%;
 }
 
+.score-principle {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(150, 171, 205, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.score-principle h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.principle-formula {
+  color: #eef2f9;
+  font-size: 13px;
+}
+
+.principle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.principle-grid div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 7px;
+  background: rgba(4, 10, 18, 0.45);
+}
+
+.principle-grid span,
+.principle-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.principle-grid strong {
+  display: block;
+  margin: 3px 0;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.principle-buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.principle-buckets span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.principle-buckets i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 .link-button {
   padding: 0;
   background: transparent;

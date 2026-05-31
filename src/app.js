@@ -33,6 +33,35 @@ const sourceColors = {
   coral: "#33a3ff"
 };
 
+const scoringModel = {
+  size: {
+    label: "PR size",
+    max: 25,
+    tiers: [
+      { lines: 500, files: 20, points: 25 },
+      { lines: 200, files: 10, points: 15 },
+      { lines: 50, files: 5, points: 8 }
+    ]
+  },
+  sentry: { label: "Sentry", max: 35, pointsPerIssue: 7 },
+  datadog: {
+    label: "Datadog",
+    max: 25,
+    tiers: [
+      { threshold: 5, points: 25 },
+      { threshold: 2, points: 18 },
+      { threshold: 1, points: 10 }
+    ]
+  },
+  linear: { label: "Linear", max: 15, pointsPerIssue: 5 },
+  buckets: [
+    { label: "Critical", range: "70-100", color: "#ff4b52" },
+    { label: "High", range: "45-69", color: "#ff7c35" },
+    { label: "Medium", range: "20-44", color: "#ffd15c" },
+    { label: "Low", range: "0-19", color: "#5bd85a" }
+  ]
+};
+
 function qs(selector, root = document) {
   return root.querySelector(selector);
 }
@@ -314,16 +343,25 @@ function sourceGroups() {
 
 function calculateRisk(lines, files, sentry = 0, datadog = 0, linear = 0) {
   let size = 0;
-  if (lines > 500 || files > 20) size = 25;
-  else if (lines > 200 || files > 10) size = 15;
-  else if (lines > 50 || files > 5) size = 8;
+  for (const tier of scoringModel.size.tiers) {
+    if (lines > tier.lines || files > tier.files) {
+      size = tier.points;
+      break;
+    }
+  }
 
   let datadogScore = 0;
-  if (datadog >= 5) datadogScore = 25;
-  else if (datadog >= 2) datadogScore = 18;
-  else if (datadog >= 1) datadogScore = 10;
+  for (const tier of scoringModel.datadog.tiers) {
+    if (datadog >= tier.threshold) {
+      datadogScore = tier.points;
+      break;
+    }
+  }
 
-  return size + Math.min(sentry * 7, 35) + datadogScore + Math.min(linear * 5, 15);
+  return size
+    + Math.min(sentry * scoringModel.sentry.pointsPerIssue, scoringModel.sentry.max)
+    + datadogScore
+    + Math.min(linear * scoringModel.linear.pointsPerIssue, scoringModel.linear.max);
 }
 
 function levelForScore(score) {
@@ -609,6 +647,19 @@ function renderLegend() {
   qs("#risk-legend").innerHTML = distributions().map((item) => `
     <div class="legend-row"><span class="legend-dot" style="background:${item.color}"></span><span>${item.label}</span><strong>${item.count} (${item.pct})</strong></div>
   `).join("");
+  qs("#score-principle").innerHTML = `
+    <h3>How score is calculated</h3>
+    <div class="principle-formula">GitHub size + Sentry + Datadog + Linear = 0-100</div>
+    <div class="principle-grid">
+      <div><span>${scoringModel.size.label}</span><strong>${scoringModel.size.max}</strong><small>lines/files changed</small></div>
+      <div><span>${scoringModel.sentry.label}</span><strong>${scoringModel.sentry.max}</strong><small>${scoringModel.sentry.pointsPerIssue} per issue</small></div>
+      <div><span>${scoringModel.datadog.label}</span><strong>${scoringModel.datadog.max}</strong><small>alert signal</small></div>
+      <div><span>${scoringModel.linear.label}</span><strong>${scoringModel.linear.max}</strong><small>${scoringModel.linear.pointsPerIssue} per issue</small></div>
+    </div>
+    <div class="principle-buckets">${scoringModel.buckets.map((bucket) => `
+      <span><i style="background:${bucket.color}"></i>${bucket.label} ${bucket.range}</span>
+    `).join("")}</div>
+  `;
 }
 
 function liveIncidents() {
