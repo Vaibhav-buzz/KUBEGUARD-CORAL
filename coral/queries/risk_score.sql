@@ -5,24 +5,31 @@ SELECT
   p.number AS pr_number,
   p.title AS pr_title,
   p.user__login AS author,
-  p.additions + p.deletions AS lines_changed,
-  p.changed_files AS files_changed,
+  COALESCE(p.additions, 0) + COALESCE(p.deletions, 0) AS lines_changed,
+  COALESCE(p.changed_files, 0) AS files_changed,
   COUNT(DISTINCT s.id) AS open_sentry_issues,
-  MAX(s.count) AS highest_sentry_event_count,
-  AVG(d.value) AS avg_error_rate_pct,
+  COUNT(DISTINCT s.id) AS highest_sentry_event_count,
+  AVG(
+    CASE
+      WHEN d.status = 'Alert' THEN 5
+      WHEN d.status = 'Warn' THEN 2
+      WHEN d.status = 'No Data' THEN 1
+      ELSE 0
+    END
+  ) AS avg_error_rate_pct,
   COUNT(DISTINCT l.id) AS open_linear_bugs
 FROM github.pulls p
 LEFT JOIN sentry.issues s
-  ON s.project = '{{service}}'
-  AND s.is_unhandled = true
-  AND s.status = 'unresolved'
-LEFT JOIN datadog.metrics d
-  ON d.metric = 'trace.web.request.errors'
-  AND d.tag_service = '{{service}}'
+  ON s.status = 'unresolved'
+LEFT JOIN datadog.monitors d
+  ON (
+    LOWER(d.name) LIKE '%{{service}}%'
+    OR LOWER(d.tags) LIKE '%{{service}}%'
+  )
 LEFT JOIN linear.issues l
-  ON l.state__name != 'Done'
+  ON l.state_name != 'Done'
   AND l.priority <= 2
-  AND l.label__names LIKE '%{{service}}%'
+  AND l.label_names LIKE '%{{service}}%'
 WHERE
   p.owner = '{{owner}}'
   AND p.repo = '{{repo}}'

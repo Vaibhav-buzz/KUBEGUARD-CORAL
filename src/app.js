@@ -135,7 +135,7 @@ function deriveServiceOptions() {
     addOptionValue(values, firstValue(issue, ["project", "project__slug", "project_slug"], ""));
   });
   (state.linear.issues || []).forEach((issue) => {
-    const labels = firstValue(issue, ["label__names", "labels"], "");
+    const labels = firstValue(issue, ["label_names", "label__names", "labels"], "");
     String(labels).split(/[,|;]/).forEach((label) => addOptionValue(values, String(label).replace(/^service:/i, "")));
   });
   return values.sort((a, b) => a.localeCompare(b));

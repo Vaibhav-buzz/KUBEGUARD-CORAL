@@ -19,7 +19,7 @@ auth:
       template: "{{input.LINEAR_API_KEY}}"
 
 test_queries:
-  - SELECT id, title, state__name FROM linear.issues LIMIT 1
+  - SELECT id, title, state_name FROM linear.issues LIMIT 1
 
 tables:
   - name: issues
@@ -56,11 +56,11 @@ tables:
         type: Utf8
       - name: priority
         type: Int64
-      - name: state__name
+      - name: state_name
         type: Utf8
       - name: team__name
         type: Utf8
-      - name: label__names
+      - name: label_names
         type: Utf8
       - name: created_at
         type: Utf8

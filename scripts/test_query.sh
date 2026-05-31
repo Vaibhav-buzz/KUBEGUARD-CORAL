@@ -13,4 +13,6 @@ SQL=$(sed \
   -e "s/{{service}}/${SERVICE_NAME}/g" \
   coral/queries/risk_score.sql)
 
-coral sql --format json "$SQL"
+SQL=$(printf '%s\n' "$SQL" | awk 'BEGIN { seen = 0 } !seen && ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*--/) { next } { seen = 1; print }')
+
+coral sql --format json -- "$SQL"

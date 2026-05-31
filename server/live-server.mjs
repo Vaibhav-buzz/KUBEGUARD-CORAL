@@ -263,6 +263,27 @@ async function githubPullDetailFallback(owner, repo, prNumber) {
   };
 }
 
+function numericValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function mergeGithubDetail(row, detailRow = {}, serviceFallback = "") {
+  const detailLines = numericValue(detailRow.lines_changed);
+  const detailFiles = numericValue(detailRow.files_changed);
+  const rowLines = numericValue(row.lines_changed);
+  const rowFiles = numericValue(row.files_changed ?? row.changed_files);
+
+  return {
+    ...row,
+    label_names: row.label_names || detailRow.label_names || "",
+    service: row.service || detailRow.service || serviceFallback,
+    lines_changed: rowLines || detailLines,
+    files_changed: rowFiles || detailFiles,
+    changed_files: rowFiles || detailFiles
+  };
+}
+
 function escapeSql(value) {
   return String(value || "").replaceAll("'", "''");
 }
@@ -382,13 +403,17 @@ async function handleApi(req, res, url) {
     const result = await coralSql(sql);
     if (result.ok && Array.isArray(result.data) && result.data.length) {
       const services = await githubRepoServices(owner, repo);
+      const rows = await Promise.all(result.data.map(async (row) => {
+        const detail = await githubPullDetailFallback(owner, repo, row.number);
+        return detail.ok ? mergeGithubDetail(row, detail.row) : row;
+      }));
       return json(res, 200, {
         ok: true,
         mode: "coral",
         configured: true,
         owner,
         repo,
-        rows: result.data,
+        rows,
         services,
         raw: result.stdout,
         error: ""
@@ -441,10 +466,14 @@ async function handleApi(req, res, url) {
       .replaceAll("{{service}}", escapeSql(service));
     const result = await coralSql(sql);
     if (result.ok && Array.isArray(result.data) && result.data.length) {
+      const detail = await githubPullDetailFallback(owner, repo, parsedPrNumber);
+      const rows = detail.ok
+        ? result.data.map((row) => mergeGithubDetail(row, detail.row, service))
+        : result.data;
       return json(res, 200, {
         ok: true,
         mode: "coral",
-        rows: result.data,
+        rows,
         raw: result.stdout,
         error: ""
       });

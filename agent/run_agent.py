@@ -27,9 +27,16 @@ def load_query() -> str:
         )
 
 
+def prepare_sql_for_cli(sql: str) -> str:
+    lines = sql.splitlines()
+    while lines and (not lines[0].strip() or lines[0].strip().startswith("--")):
+        lines.pop(0)
+    return "\n".join(lines).strip()
+
+
 def run_coral_query(sql: str) -> list[dict]:
     result = subprocess.run(
-        ["coral", "sql", "--format", "json", sql],
+        ["coral", "sql", "--format", "json", "--", prepare_sql_for_cli(sql)],
         capture_output=True,
         text=True,
         timeout=60,
