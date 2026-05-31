@@ -825,9 +825,69 @@ function renderHealthCards() {
 
 function renderIntegrations() {
   const groups = sourceGroups();
-  qs("#integration-grid").innerHTML = Object.entries(groups).map(([schema, tables]) => `
-    <article class="integration-card"><div class="integration-header"><h3>${escapeHtml(schema)}</h3><span class="status-pill ready">Live</span></div><p>${tables.length} tables available through Coral.</p><footer><span>${escapeHtml(schema)}.*</span><button class="secondary-button" data-action="discover">Refresh</button></footer></article>
-  `).join("") || emptyState("No live integrations discovered.");
+  const datadogRows = (state.datadog.hosts?.length || 0)
+    + (state.datadog.monitors?.length || 0)
+    + (state.datadog.metricNames?.length || 0)
+    + (state.datadog.services?.length || 0)
+    + (state.datadog.incidents?.length || 0)
+    + (state.datadog.reports?.length || 0);
+  const cards = [
+    {
+      schema: "github",
+      label: "GitHub",
+      rows: state.pulls.length,
+      tables: groups.github || [],
+      live: state.pulls.length > 0 || Boolean(groups.github?.length),
+      detail: `${state.pulls.length} pull requests loaded from the configured repository.`,
+      empty: "No PR rows returned yet. Check repo access or create a PR."
+    },
+    {
+      schema: "datadog",
+      label: "Datadog",
+      rows: datadogRows,
+      tables: groups.datadog || [],
+      live: datadogRows > 0 || Boolean(groups.datadog?.length),
+      detail: `${datadogRows} live rows across hosts, monitors, metrics, services, incidents, and reports.`,
+      empty: (state.datadog.errors || [])[0] || "No Datadog rows returned yet."
+    },
+    {
+      schema: "sentry",
+      label: "Sentry",
+      rows: state.sentry.issues?.length || 0,
+      tables: groups.sentry || [],
+      live: state.sentry.ok === true || Boolean(groups.sentry?.length),
+      detail: `${state.sentry.issues?.length || 0} live issues returned from Sentry.`,
+      empty: state.sentry.error || "Sentry is not returning live rows yet."
+    },
+    {
+      schema: "linear",
+      label: "Linear",
+      rows: state.linear.issues?.length || 0,
+      tables: groups.linear || [],
+      live: state.linear.ok === true || Boolean(groups.linear?.length),
+      detail: `${state.linear.issues?.length || 0} live issues returned from Linear.`,
+      empty: state.linear.error || "Linear is not returning live rows yet."
+    }
+  ];
+
+  qs("#integration-grid").innerHTML = cards.map((card) => {
+    const color = sourceColors[card.schema] || "#33a3ff";
+    return `
+      <article class="integration-card ${card.live ? "integration-live" : "integration-waiting"}">
+        <div class="integration-header">
+          <h3>${escapeHtml(card.label)}</h3>
+          <span class="status-pill ${card.live ? "ready" : "status-closed"}">${card.live ? "Live" : "Waiting"}</span>
+        </div>
+        <p>${escapeHtml(card.live ? card.detail : card.empty)}</p>
+        <div class="integration-stats">
+          <div><span>Rows</span><strong>${card.rows}</strong></div>
+          <div><span>Tables</span><strong>${card.tables.length}</strong></div>
+        </div>
+        <div class="source-health" style="--source-color:${color}">${card.live ? "Connected through Coral" : "Needs source sync"}</div>
+        <footer><span>${escapeHtml(card.schema)}.*</span><button class="secondary-button" data-action="sync">Refresh</button></footer>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderAnalytics() {
@@ -836,59 +896,241 @@ function renderAnalytics() {
   qs("#analytics-services").innerHTML = `<h3>Service Risk</h3><div class="service-bars">${qs("#service-bars")?.innerHTML || emptyState("No live service risk scores.")}</div>`;
 }
 
+function datadogLiveRowCount() {
+  return (state.datadog.hosts?.length || 0)
+    + (state.datadog.monitors?.length || 0)
+    + (state.datadog.metricNames?.length || 0)
+    + (state.datadog.services?.length || 0)
+    + (state.datadog.incidents?.length || 0)
+    + (state.datadog.reports?.length || 0);
+}
+
+function liveSourceNodes(groups) {
+  const sourceDefinitions = [
+    {
+      id: "github",
+      label: "GitHub",
+      rows: state.pulls.length,
+      tables: groups.github || [],
+      meta: `${state.pulls.length} PRs`,
+      detail: "labels, branches, merge state"
+    },
+    {
+      id: "datadog",
+      label: "Datadog",
+      rows: datadogLiveRowCount(),
+      tables: groups.datadog || [],
+      meta: `${state.datadog.monitors?.length || 0} monitors`,
+      detail: `${state.datadog.reports?.filter((item) => item.points?.length).length || 0} metric reports`
+    },
+    {
+      id: "sentry",
+      label: "Sentry",
+      rows: state.sentry.issues?.length || 0,
+      tables: groups.sentry || [],
+      connected: state.sentry.ok === true,
+      meta: `${state.sentry.issues?.length || 0} issues`,
+      detail: state.sentry.error || "unresolved error signals"
+    },
+    {
+      id: "linear",
+      label: "Linear",
+      rows: state.linear.issues?.length || 0,
+      tables: groups.linear || [],
+      connected: state.linear.ok === true,
+      meta: `${state.linear.issues?.length || 0} issues`,
+      detail: state.linear.error || "priority bugs and reviews"
+    }
+  ];
+
+  return sourceDefinitions.map((source, index) => ({
+    ...source,
+    x: 13,
+    y: 16 + index * 14,
+    type: "source",
+    color: sourceColors[source.id] || "#f2f2f2",
+    live: source.connected || source.rows > 0 || source.tables.length > 0
+  }));
+}
+
+function sentryIssueCountForService(service) {
+  const selected = compactValue(service);
+  if (!selected) return 0;
+  return (state.sentry.issues || []).filter((issue) => {
+    const project = compactValue(firstValue(issue, ["project", "project__slug"], ""));
+    const labels = labelsFromRow(issue);
+    const text = compactValue([
+      firstValue(issue, ["title"], ""),
+      firstValue(issue, ["culprit"], ""),
+      firstValue(issue, ["metadata__filename"], "")
+    ].join(" "));
+    return project === selected || labels.some((label) => labelMatchesService(label, service)) || text.includes(selected);
+  }).length;
+}
+
+function linearIssueCountForService(service) {
+  return (state.linear.issues || []).filter((issue) => {
+    if (!isActiveLinearIssue(issue) || !isHighPriorityLinearIssue(issue)) return false;
+    return labelsFromRow(issue).some((label) => labelMatchesService(label, service));
+  }).length;
+}
+
+function datadogServiceNames() {
+  const values = [];
+  (state.datadog.services || []).forEach((service) => addOptionValue(values, firstValue(service, ["service", "name", "env", "tag_service"], "")));
+  (state.datadog.monitors || []).forEach((monitor) => addOptionValue(values, serviceFromDatadogRow(monitor)));
+  (state.datadog.incidents || []).forEach((incident) => addOptionValue(values, firstValue(incident, ["service", "customer_impact_scope"], "")));
+  if (!values.length && state.datadog.hosts?.length) addOptionValue(values, "infrastructure");
+  return values.sort((a, b) => a.localeCompare(b));
+}
+
+function serviceTopology() {
+  const services = new Map();
+  const ensureService = (name) => {
+    const service = String(name || "unknown").trim() || "unknown";
+    if (!services.has(service)) {
+      services.set(service, {
+        service,
+        prs: 0,
+        pending: 0,
+        successful: 0,
+        closed: 0,
+        maxRisk: 0,
+        monitors: 0,
+        sentry: 0,
+        linear: 0,
+        datadog: 0
+      });
+    }
+    return services.get(service);
+  };
+
+  state.pulls.forEach((pr) => {
+    const item = ensureService(pr.service);
+    item.prs += 1;
+    item.pending += pr.status === "PENDING" ? 1 : 0;
+    item.successful += pr.status === "SUCCESSFUL" ? 1 : 0;
+    item.closed += pr.status === "CLOSED" ? 1 : 0;
+    item.maxRisk = Math.max(item.maxRisk, pr.score || 0);
+    item.sentry += pr.sentry || 0;
+    item.linear += pr.linear || 0;
+    item.datadog = Math.max(item.datadog, pr.datadog || 0);
+  });
+
+  datadogServiceNames().forEach((service) => ensureService(service));
+
+  services.forEach((item) => {
+    item.monitors = relatedMonitors(item.service).length;
+    item.sentry = Math.max(item.sentry, sentryIssueCountForService(item.service));
+    item.linear = Math.max(item.linear, linearIssueCountForService(item.service));
+  });
+
+  return Array.from(services.values())
+    .sort((a, b) => b.maxRisk - a.maxRisk || b.pending - a.pending || b.monitors - a.monitors || a.service.localeCompare(b.service))
+    .slice(0, 5);
+}
+
+function renderMapNode(node) {
+  const score = Number(node.score);
+  const scoreHtml = Number.isFinite(score)
+    ? `<span class="map-node-score" style="--score-color:${riskColor(score)}">${score}</span>`
+    : "";
+  const metrics = (node.metrics || []).map((item) => `<em>${escapeHtml(item)}</em>`).join("");
+  return `
+    <div class="map-node map-node-${node.type} ${node.live === false ? "map-node-waiting" : ""}" style="left:${node.x}%;top:${node.y}%;--node-color:${node.color || "#f2f2f2"}">
+      <div class="map-node-title">
+        <strong>${escapeHtml(node.label)}</strong>
+        ${scoreHtml}
+      </div>
+      <span>${escapeHtml(node.meta)}</span>
+      ${node.detail ? `<small>${escapeHtml(node.detail)}</small>` : ""}
+      ${metrics ? `<div class="map-node-metrics">${metrics}</div>` : ""}
+    </div>
+  `;
+}
+
 function renderServiceMap() {
   const groups = sourceGroups();
-  const sourceNames = Object.keys(groups).filter((name) => name !== "coral").slice(0, 5);
-  if (!sourceNames.length && !state.pulls.length) {
-    qs("#service-map").innerHTML = emptyState("No live source topology available.");
-    return;
-  }
-  const sourceNodes = sourceNames.map((name, index) => ({
-    id: name,
-    label: name,
-    meta: `${groups[name].length} live tables`,
-    x: 12,
-    y: 18 + index * 14,
-    type: "source"
+  const sourceNodes = liveSourceNodes(groups);
+  const services = serviceTopology();
+  const serviceNodes = services.map((item, index) => ({
+    id: `service-${item.service}`,
+    label: item.service,
+    meta: `${item.prs} PRs, ${item.monitors} monitors`,
+    detail: `${item.sentry} Sentry, ${item.linear} Linear, ${item.datadog}% error`,
+    metrics: [`${item.pending} pending`, `${item.successful} merged`, `${item.closed} closed`],
+    score: item.maxRisk,
+    x: 78,
+    y: 14 + index * 13,
+    type: "service",
+    color: riskColor(item.maxRisk),
+    live: item.prs > 0 || item.monitors > 0 || item.sentry > 0 || item.linear > 0
   }));
-  const serviceNames = deriveDatadogServiceNames().slice(0, 4);
-  const serviceNodes = serviceNames.map((name, index) => ({
-    id: `service-${name}`,
-    label: name,
-    meta: `${relatedMonitors(name).length || state.datadog.monitors?.length || 0} monitors`,
-    x: 72,
-    y: 20 + index * 16,
-    type: "service"
-  }));
+  const pending = state.pulls.filter((pr) => pr.status === "PENDING").length;
+  const successful = state.pulls.filter((pr) => pr.status === "SUCCESSFUL").length;
+  const closed = state.pulls.filter((pr) => pr.status === "CLOSED").length;
+  const blocked = state.pulls.filter(isGateBlocked).length;
+  const liveSources = sourceNodes.filter((source) => source.live).length;
+  const highestService = services[0];
   const outputNodes = [
-    { id: "pulls", label: "Pull Requests", meta: `${state.pulls.length} live PRs`, x: 48, y: 74, type: "output" },
-    { id: "gate", label: "Policies & Gates", meta: `${state.pulls.filter(isGateBlocked).length} blocked`, x: 72, y: 78, type: "output" }
+    {
+      id: "pulls",
+      label: "Pull Request Queue",
+      meta: `${state.pulls.length} live PRs`,
+      detail: `${pending} pending, ${successful} merged, ${closed} closed`,
+      x: 44,
+      y: 78,
+      type: "output",
+      color: "#f0b64c",
+      live: state.pulls.length > 0
+    },
+    {
+      id: "gate",
+      label: "Gate Outcome",
+      meta: `${blocked} blocked`,
+      detail: blocked ? "critical pending risk" : "no critical pending PRs",
+      x: 66,
+      y: 78,
+      type: "output",
+      color: blocked ? "#ff4b52" : "#5bd85a",
+      live: true
+    }
   ];
   const coreNode = {
     id: "coral",
     label: "Coral SQL",
     meta: `${state.tables.length} discovered tables`,
-    x: 43,
+    detail: `${liveSources} of ${sourceNodes.length} sources live`,
+    x: 42,
     y: 42,
-    type: "core"
+    type: "core",
+    color: "#f2f2f2",
+    live: liveSources > 0
   };
   const nodes = [...sourceNodes, coreNode, ...serviceNodes, ...outputNodes];
   const links = [
-    ...sourceNodes.map((node) => [node, coreNode]),
-    ...serviceNodes.map((node) => [coreNode, node]),
-    [coreNode, outputNodes[0]],
-    [outputNodes[0], outputNodes[1]]
+    ...sourceNodes.map((node) => [node, coreNode, node.color]),
+    ...serviceNodes.map((node) => [coreNode, node, node.color]),
+    [coreNode, outputNodes[0], "#f0b64c"],
+    [outputNodes[0], outputNodes[1], outputNodes[1].color]
   ];
-  const lines = links.map(([from, to]) => `
-    <line class="map-link" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
+  const lines = links.map(([from, to, color]) => `
+    <line class="map-link" style="--link-color:${color}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
   `).join("");
-  const cards = nodes.map((node) => `
-    <div class="map-node map-node-${node.type}" style="left:${node.x}%;top:${node.y}%">
-      <strong>${escapeHtml(node.label)}</strong>
-      <span>${escapeHtml(node.meta)}</span>
-    </div>
+  const insights = [
+    ["Highest risk", highestService ? `${highestService.service} ${highestService.maxRisk}` : "--"],
+    ["Live sources", `${liveSources}/${sourceNodes.length}`],
+    ["Open issues", `${state.sentry.issues?.length || 0} Sentry / ${state.linear.issues?.length || 0} Linear`],
+    ["Gate", blocked ? `${blocked} blocked` : "clear"]
+  ].map(([label, value]) => `
+    <div class="map-insight"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
   `).join("");
-  qs("#service-map").innerHTML = `<svg class="map-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${cards}`;
+  const cards = nodes.map(renderMapNode).join("");
+  qs("#service-map").innerHTML = `
+    <svg class="map-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>
+    ${cards}
+    <div class="map-insights">${insights}</div>
+  `;
 }
 
 function renderLiveSummary() {
