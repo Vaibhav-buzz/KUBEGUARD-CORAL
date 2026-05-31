@@ -1,28 +1,29 @@
 :root {
-  --bg: #07101b;
-  --bg-deep: #040a12;
-  --panel: #101b29;
-  --panel-strong: #142236;
-  --panel-soft: #0d1725;
-  --border: rgba(150, 171, 205, 0.18);
-  --border-strong: rgba(150, 171, 205, 0.3);
-  --text: #f5f7fb;
-  --muted: #aeb8c9;
-  --dim: #6f7d90;
-  --purple: #7f5cff;
-  --purple-soft: rgba(127, 92, 255, 0.16);
-  --blue: #33a3ff;
-  --cyan: #43d6dc;
-  --green: #5bd85a;
-  --orange: #ff9d24;
-  --yellow: #ffd15c;
-  --red: #ff4b52;
-  --pink: #ff5fa3;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  --bg: #181818;
+  --bg-deep: #111;
+  --panel: #1e1e1e;
+  --panel-strong: #262626;
+  --panel-soft: #191919;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --text: #f4f4f4;
+  --muted: #a8a8a8;
+  --dim: #727272;
+  --purple: #efefef;
+  --purple-soft: rgba(255, 255, 255, 0.09);
+  --blue: #d7d7d7;
+  --cyan: #bfbfbf;
+  --green: #66d36e;
+  --orange: #f0b64c;
+  --yellow: #f3cf73;
+  --red: #ff5b5b;
+  --pink: #e7b7c6;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
   --radius: 8px;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Inter, "SF Pro Display", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+  color-scheme: dark;
 }
 
 * {
@@ -33,10 +34,9 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(82, 76, 255, 0.16), transparent 28rem),
-    linear-gradient(135deg, var(--bg-deep), var(--bg));
+  background: var(--bg);
   color: var(--text);
+  letter-spacing: 0;
 }
 
 button,
@@ -53,6 +53,7 @@ button {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
   min-height: 100vh;
+  isolation: isolate;
 }
 
 .sidebar {
@@ -63,7 +64,7 @@ button {
   flex-direction: column;
   gap: 20px;
   padding: 18px 14px;
-  background: rgba(4, 11, 19, 0.86);
+  background: rgba(17, 17, 17, 0.92);
   border-right: 1px solid var(--border);
   backdrop-filter: blur(18px);
 }
@@ -80,11 +81,11 @@ button {
   place-items: center;
   width: 42px;
   height: 42px;
-  border: 2px solid rgba(126, 105, 255, 0.9);
-  border-radius: 14px 14px 18px 18px;
-  color: #d7d0ff;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 14px;
+  color: #f5f5f5;
   font-weight: 800;
-  box-shadow: inset 0 0 16px rgba(127, 92, 255, 0.35);
+  box-shadow: inset 0 0 16px rgba(255, 255, 255, 0.08);
 }
 
 .brand strong {
@@ -111,7 +112,6 @@ button {
 .secondary-button,
 .primary-button,
 .icon-button,
-.ai-button,
 .link-button {
   border: 1px solid transparent;
 }
@@ -124,15 +124,15 @@ button {
   min-height: 46px;
   padding: 0 14px;
   border-radius: var(--radius);
-  color: #dce4f1;
+  color: #d9d9d9;
   background: transparent;
   text-align: left;
 }
 
 .nav-item:hover,
 .nav-item.active {
-  border-color: rgba(127, 92, 255, 0.35);
-  background: linear-gradient(90deg, rgba(127, 92, 255, 0.58), rgba(70, 85, 191, 0.45));
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .nav-icon {
@@ -141,8 +141,8 @@ button {
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.07);
-  color: #d8e0f1;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f2f2;
   font-size: 11px;
   font-weight: 700;
 }
@@ -197,7 +197,7 @@ button {
   padding: 12px;
   border-color: var(--border);
   border-radius: var(--radius);
-  background: rgba(10, 18, 30, 0.8);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .avatar {
@@ -206,7 +206,7 @@ button {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f2dbc3, #a85b3c);
+  background: #282828;
   color: white;
   font-weight: 800;
 }
@@ -221,8 +221,33 @@ button {
 }
 
 .main {
+  position: relative;
+  z-index: 0;
   min-width: 0;
   padding: 18px 24px 26px;
+  overflow: hidden;
+}
+
+.main::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: -1;
+  width: min(46vw, 720px);
+  height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(24, 24, 24, 0.98), rgba(24, 24, 24, 0.2) 48%, rgba(24, 24, 24, 0.5)),
+    url("../assets/coral-background.png") right center / cover no-repeat;
+  opacity: 0.55;
+  pointer-events: none;
+  filter: grayscale(1) contrast(1.06);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 36%);
+}
+
+.main > * {
+  position: relative;
+  z-index: 1;
 }
 
 .topbar {
@@ -237,7 +262,9 @@ button {
 
 .topbar h1 {
   margin: 0;
-  font-size: clamp(22px, 2vw, 28px);
+  font-size: clamp(28px, 3.2vw, 46px);
+  line-height: 1.08;
+  font-weight: 560;
   letter-spacing: 0;
 }
 
@@ -262,7 +289,7 @@ button {
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: rgba(4, 10, 18, 0.72);
+  background: rgba(20, 20, 20, 0.82);
 }
 
 .search-box input {
@@ -279,7 +306,7 @@ button {
 }
 
 .icon-button,
-.ai-button {
+.ghost-action {
   display: grid;
   place-items: center;
   height: 40px;
@@ -287,13 +314,6 @@ button {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-}
-
-.ai-button {
-  min-width: 72px;
-  padding: 0 14px;
-  background: linear-gradient(135deg, var(--purple), #4731d4);
-  font-weight: 700;
 }
 
 .with-badge {
@@ -329,7 +349,7 @@ select,
   height: 38px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: rgba(9, 17, 28, 0.86);
+  background: rgba(24, 24, 24, 0.9);
   color: var(--text);
 }
 
@@ -345,14 +365,15 @@ select {
 
 .secondary-button:hover,
 .icon-button:hover {
-  border-color: rgba(127, 92, 255, 0.55);
-  background: rgba(127, 92, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .primary-button {
-  border-color: rgba(127, 92, 255, 0.65);
-  background: linear-gradient(135deg, var(--purple), #3b70ff);
-  font-weight: 800;
+  border-color: rgba(255, 255, 255, 0.24);
+  background: #f2f2f2;
+  color: #171717;
+  font-weight: 760;
 }
 
 .sync-pill {
@@ -373,7 +394,8 @@ select {
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: rgba(8, 17, 29, 0.82);
+  background: rgba(24, 24, 24, 0.68);
+  backdrop-filter: blur(14px);
 }
 
 .live-banner strong,
@@ -426,9 +448,8 @@ select {
 .health-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
-    rgba(13, 23, 36, 0.94);
+  background: rgba(29, 29, 29, 0.82);
+  backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
 }
 
@@ -451,7 +472,7 @@ select {
 
 .metric-card h3 {
   margin: 2px 0 4px;
-  color: #d8e0ef;
+  color: #d8d8d8;
   font-size: 14px;
   font-weight: 500;
 }
@@ -566,7 +587,7 @@ tr {
 }
 
 tbody tr:hover {
-  background: rgba(127, 92, 255, 0.08);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .pr-cell {
@@ -613,9 +634,9 @@ tbody tr:hover {
 }
 
 .service-pill.payments {
-  background: rgba(127, 92, 255, 0.22);
-  color: #c9bdff;
-  border: 1px solid rgba(127, 92, 255, 0.28);
+  background: rgba(240, 182, 76, 0.16);
+  color: #f2cf8e;
+  border: 1px solid rgba(240, 182, 76, 0.28);
 }
 
 .service-pill.auth {
@@ -825,43 +846,6 @@ tbody tr:hover {
   background: var(--bar-color);
 }
 
-.recommendation-panel {
-  border-color: rgba(127, 92, 255, 0.32);
-  background:
-    linear-gradient(135deg, rgba(127, 92, 255, 0.18), rgba(23, 34, 55, 0.95)),
-    var(--panel);
-}
-
-.recommendation-card {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid rgba(127, 92, 255, 0.24);
-  border-radius: var(--radius);
-  background: rgba(15, 19, 47, 0.76);
-}
-
-.recommendation-card h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.recommendation-card ul {
-  margin: 0;
-  padding-left: 18px;
-  color: #dfe7f4;
-}
-
-.recommendation-card li {
-  margin: 4px 0;
-}
-
-.recommendation-action {
-  padding-top: 12px;
-  border-top: 1px solid rgba(127, 92, 255, 0.26);
-  color: #f2d27a;
-}
-
 .split-layout,
 .gate-layout {
   display: grid;
@@ -938,14 +922,14 @@ tbody tr:hover {
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: rgba(8, 17, 29, 0.78);
+  background: rgba(255, 255, 255, 0.045);
   opacity: 0.68;
 }
 
 .workflow-step.active {
   opacity: 1;
-  border-color: rgba(127, 92, 255, 0.5);
-  background: rgba(127, 92, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .workflow-step span {
@@ -956,7 +940,7 @@ tbody tr:hover {
   margin-bottom: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  color: #cfc7ff;
+  color: #f1f1f1;
   font-weight: 900;
 }
 
@@ -1006,13 +990,13 @@ tbody tr:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   outline: 0;
-  background: rgba(4, 10, 18, 0.72);
+  background: rgba(17, 17, 17, 0.78);
   color: var(--text);
 }
 
 .live-config input:focus,
 .live-config select:focus {
-  border-color: rgba(127, 92, 255, 0.68);
+  border-color: rgba(255, 255, 255, 0.42);
 }
 
 .live-summary-grid {
@@ -1147,7 +1131,6 @@ tbody tr:hover {
 
 .service-health-grid,
 .integration-grid,
-.recommendation-grid,
 .admin-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(220px, 1fr));
@@ -1385,7 +1368,7 @@ tbody tr:hover {
   position: absolute;
   height: 2px;
   transform-origin: left center;
-  background: linear-gradient(90deg, rgba(127, 92, 255, 0.85), rgba(67, 214, 220, 0.65));
+  background: linear-gradient(90deg, rgba(242, 242, 242, 0.72), rgba(240, 182, 76, 0.55));
 }
 
 .integration-card p,
@@ -1413,9 +1396,9 @@ tbody tr:hover {
   opacity: 0;
   max-width: min(360px, calc(100vw - 40px));
   padding: 12px 14px;
-  border: 1px solid rgba(127, 92, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: var(--radius);
-  background: rgba(9, 17, 28, 0.96);
+  background: rgba(24, 24, 24, 0.96);
   box-shadow: var(--shadow);
   transition: opacity 180ms ease, transform 180ms ease;
 }
@@ -1482,7 +1465,6 @@ tbody tr:hover {
   .workflow-steps,
   .service-health-grid,
   .integration-grid,
-  .recommendation-grid,
   .admin-grid,
   .incident-board {
     grid-template-columns: 1fr;
