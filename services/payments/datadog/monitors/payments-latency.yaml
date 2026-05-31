@@ -1,0 +1,10 @@
+name: payments p95 latency is elevated
+type: query alert
+query: avg(last_10m):p95:trace.web.request.duration{service:payments} > 1.5
+message: |
+  Payments latency is elevated. Check gateway saturation and retry pressure.
+tags:
+  - service:payments
+  - team:checkout
+  - gate:deployment-risk
+

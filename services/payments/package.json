@@ -1,0 +1,12 @@
+{
+  "name": "kubeguard-demo-payments",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node tests/retryPolicy.test.js"
+  },
+  "dependencies": {}
+}
+

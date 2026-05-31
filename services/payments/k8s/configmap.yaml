@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payments-config
+data:
+  SERVICE_NAME: payments
+  RETRY_ATTEMPTS: "7"
+  BASE_DELAY_MS: "300"
+  MAX_DELAY_MS: "8000"
+  GATEWAY_TIMEOUT_MS: "2500"
+
