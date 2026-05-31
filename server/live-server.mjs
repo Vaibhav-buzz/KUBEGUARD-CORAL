@@ -105,8 +105,22 @@ function parseJsonOutput(text) {
   }
 }
 
+function prepareSqlForCli(sql) {
+  const lines = String(sql || "").split(/\r?\n/);
+  while (lines.length) {
+    const trimmed = lines[0].trim();
+    if (trimmed === "" || trimmed.startsWith("--")) {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+  return lines.join("\n").trim();
+}
+
 async function coralSql(sql) {
-  const result = await coral(["sql", "--format", "json", sql], { timeout: 60000 });
+  const preparedSql = prepareSqlForCli(sql);
+  const result = await coral(["sql", "--format", "json", "--", preparedSql], { timeout: 60000 });
   return {
     ...result,
     data: result.ok ? parseJsonOutput(result.stdout) : []
@@ -401,6 +415,8 @@ async function handleApi(req, res, url) {
     const repo = url.searchParams.get("repo") || process.env.REPO_NAME || process.env.GITHUB_REPO;
     const prNumber = url.searchParams.get("pr_number") || process.env.PR_NUMBER;
     const service = url.searchParams.get("service") || process.env.SERVICE_NAME || "unknown";
+    const prNumberText = String(prNumber || "").trim();
+    const parsedPrNumber = Number.parseInt(prNumberText, 10);
 
     if (!owner || !repo || !prNumber) {
       return json(res, 400, {
@@ -409,12 +425,19 @@ async function handleApi(req, res, url) {
       });
     }
 
+    if (!/^\d+$/.test(prNumberText) || !Number.isInteger(parsedPrNumber) || parsedPrNumber <= 0) {
+      return json(res, 400, {
+        ok: false,
+        message: "Choose a numeric GitHub PR number from the live PR dropdown."
+      });
+    }
+
     const queryPath = path.join(root, "coral", "queries", "risk_score.sql");
     const template = await readFile(queryPath, "utf8");
     const sql = template
       .replaceAll("{{owner}}", escapeSql(owner))
       .replaceAll("{{repo}}", escapeSql(repo))
-      .replaceAll("{{pr_number}}", String(Number(prNumber)))
+      .replaceAll("{{pr_number}}", String(parsedPrNumber))
       .replaceAll("{{service}}", escapeSql(service));
     const result = await coralSql(sql);
     if (result.ok && Array.isArray(result.data) && result.data.length) {
@@ -427,7 +450,7 @@ async function handleApi(req, res, url) {
       });
     }
 
-    const fallback = await githubPullDetailFallback(owner, repo, prNumber);
+    const fallback = await githubPullDetailFallback(owner, repo, parsedPrNumber);
     return json(res, 200, {
       ok: fallback.ok,
       mode: fallback.ok ? "github-rest-fallback" : "coral-failed",

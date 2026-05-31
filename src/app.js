@@ -138,15 +138,14 @@ function deriveServiceOptions() {
     const labels = firstValue(issue, ["label__names", "labels"], "");
     String(labels).split(/[,|;]/).forEach((label) => addOptionValue(values, String(label).replace(/^service:/i, "")));
   });
-  addOptionValue(values, state.config.service);
   return values.sort((a, b) => a.localeCompare(b));
 }
 
-function syncSelect(selector, placeholder, options, value, renderLabel = (item) => item) {
+function syncSelect(selector, placeholder, options, value, renderLabel = (item) => item, allowCurrentValue = true) {
   const select = qs(selector);
   if (!select) return;
   const allOptions = [...options];
-  if (value && !allOptions.some((item) => String(item.value ?? item) === String(value))) {
+  if (allowCurrentValue && value && !allOptions.some((item) => String(item.value ?? item) === String(value))) {
     allOptions.unshift({ value, label: value });
   }
   select.innerHTML = `<option value="">${placeholder}</option>` + allOptions
@@ -156,7 +155,8 @@ function syncSelect(selector, placeholder, options, value, renderLabel = (item) 
       return `<option value="${escapeHtml(optionValue)}">${escapeHtml(label)}</option>`;
     })
     .join("");
-  select.value = value || "";
+  const hasValue = allOptions.some((item) => String(item.value ?? item) === String(value));
+  select.value = hasValue ? String(value || "") : "";
 }
 
 function syncLiveSelects() {
@@ -165,9 +165,10 @@ function syncLiveSelects() {
     state.pulls.length ? "Select PR" : "No PRs loaded",
     state.pulls.map((pr) => ({ value: String(pr.number), label: `#${pr.number} ${pr.title}` })),
     state.config.prNumber,
-    (item) => item.label
+    (item) => item.label,
+    false
   );
-  syncSelect("#live-service", deriveServiceOptions().length ? "Select service" : "No services loaded", deriveServiceOptions(), state.config.service);
+  syncSelect("#live-service", deriveServiceOptions().length ? "Select service" : "No services loaded", deriveServiceOptions(), state.config.service, (item) => item, false);
 }
 
 async function fetchJson(url) {
@@ -307,7 +308,9 @@ function applyPullSelection() {
   state.selectedPr = selected;
   if (selected) {
     state.config.prNumber = String(selected.number);
-    if (selected.service && !state.config.service) state.config.service = selected.service;
+    if (selected.service) state.config.service = selected.service;
+  } else {
+    state.config.prNumber = "";
   }
 }
 
