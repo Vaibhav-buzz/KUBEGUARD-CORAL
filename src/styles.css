@@ -1440,8 +1440,9 @@ tbody tr:hover {
 
 .service-map {
   position: relative;
-  min-height: 640px;
+  min-height: 0;
   overflow: hidden;
+  padding: 18px;
   border: 1px solid rgba(150, 171, 205, 0.12);
   border-radius: var(--radius);
   background:
@@ -1451,34 +1452,63 @@ tbody tr:hover {
   background-size: 46px 46px;
 }
 
-.map-links {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.map-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.95fr) minmax(220px, 1fr) minmax(420px, 2fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: stretch;
 }
 
-.map-link {
-  stroke: var(--link-color, rgba(242, 242, 242, 0.5));
-  stroke-width: 0.42;
-  stroke-linecap: round;
-  opacity: 0.72;
-  filter: drop-shadow(0 0 8px rgba(242, 242, 242, 0.18));
+.map-lane {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(242, 242, 242, 0.12);
+  border-radius: var(--radius);
+  background: rgba(18, 18, 18, 0.6);
+  box-shadow: inset 0 0 28px rgba(255, 255, 255, 0.025);
+}
+
+.map-lane-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.map-lane-heading strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.map-stack,
+.map-service-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.map-service-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-content: start;
 }
 
 .map-node {
-  position: absolute;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 7px;
-  width: 188px;
-  min-height: 108px;
+  width: 100%;
+  min-height: 0;
   padding: 13px 14px;
   border: 1px solid var(--node-color, var(--border-strong));
   border-radius: var(--radius);
   background: rgba(12, 23, 38, 0.95);
   text-align: left;
-  transform: translate(-50%, -50%);
   box-shadow:
     0 18px 38px rgba(0, 0, 0, 0.26),
     inset 0 0 28px rgba(255, 255, 255, 0.025);
@@ -1498,18 +1528,17 @@ tbody tr:hover {
 }
 
 .map-node-core {
-  width: 210px;
-  min-height: 118px;
+  min-height: 128px;
   background: rgba(29, 29, 29, 0.98);
 }
 
 .map-node-service {
-  width: 232px;
+  min-height: 146px;
   background: rgba(8, 20, 24, 0.96);
 }
 
 .map-node-output {
-  width: 216px;
+  min-height: 128px;
   background: rgba(37, 30, 17, 0.96);
 }
 
@@ -1573,14 +1602,34 @@ tbody tr:hover {
   text-align: center;
 }
 
+.map-flow-card {
+  margin-top: 10px;
+  padding: 13px 14px;
+  border: 1px dashed rgba(242, 242, 242, 0.2);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.map-flow-card strong {
+  display: block;
+  color: var(--text);
+}
+
+.map-flow-card span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .map-insights {
-  position: absolute;
-  right: 18px;
-  bottom: 16px;
-  left: 18px;
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  margin-top: 14px;
 }
 
 .map-insight {
@@ -1605,6 +1654,28 @@ tbody tr:hover {
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 1380px) {
+  .map-layout {
+    grid-template-columns: minmax(190px, 1fr) minmax(220px, 1fr) minmax(360px, 1.6fr);
+  }
+
+  .map-lane-outcomes {
+    grid-column: 1 / -1;
+  }
+
+  .map-lane-outcomes .map-stack {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .map-layout,
+  .map-insights,
+  .map-lane-outcomes .map-stack {
+    grid-template-columns: 1fr;
+  }
 }
 
 .integration-card p,

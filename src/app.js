@@ -1037,7 +1037,7 @@ function renderMapNode(node) {
     : "";
   const metrics = (node.metrics || []).map((item) => `<em>${escapeHtml(item)}</em>`).join("");
   return `
-    <div class="map-node map-node-${node.type} ${node.live === false ? "map-node-waiting" : ""}" style="left:${node.x}%;top:${node.y}%;--node-color:${node.color || "#f2f2f2"}">
+    <article class="map-node map-node-${node.type} ${node.live === false ? "map-node-waiting" : ""}" style="--node-color:${node.color || "#f2f2f2"}">
       <div class="map-node-title">
         <strong>${escapeHtml(node.label)}</strong>
         ${scoreHtml}
@@ -1045,7 +1045,7 @@ function renderMapNode(node) {
       <span>${escapeHtml(node.meta)}</span>
       ${node.detail ? `<small>${escapeHtml(node.detail)}</small>` : ""}
       ${metrics ? `<div class="map-node-metrics">${metrics}</div>` : ""}
-    </div>
+    </article>
   `;
 }
 
@@ -1060,8 +1060,7 @@ function renderServiceMap() {
     detail: `${item.sentry} Sentry, ${item.linear} Linear, ${item.datadog}% error`,
     metrics: [`${item.pending} pending`, `${item.successful} merged`, `${item.closed} closed`],
     score: item.maxRisk,
-    x: 78,
-    y: 14 + index * 13,
+    rank: index + 1,
     type: "service",
     color: riskColor(item.maxRisk),
     live: item.prs > 0 || item.monitors > 0 || item.sentry > 0 || item.linear > 0
@@ -1078,8 +1077,6 @@ function renderServiceMap() {
       label: "Pull Request Queue",
       meta: `${state.pulls.length} live PRs`,
       detail: `${pending} pending, ${successful} merged, ${closed} closed`,
-      x: 44,
-      y: 78,
       type: "output",
       color: "#f0b64c",
       live: state.pulls.length > 0
@@ -1089,8 +1086,6 @@ function renderServiceMap() {
       label: "Gate Outcome",
       meta: `${blocked} blocked`,
       detail: blocked ? "critical pending risk" : "no critical pending PRs",
-      x: 66,
-      y: 78,
       type: "output",
       color: blocked ? "#ff4b52" : "#5bd85a",
       live: true
@@ -1101,22 +1096,10 @@ function renderServiceMap() {
     label: "Coral SQL",
     meta: `${state.tables.length} discovered tables`,
     detail: `${liveSources} of ${sourceNodes.length} sources live`,
-    x: 42,
-    y: 42,
     type: "core",
     color: "#f2f2f2",
     live: liveSources > 0
   };
-  const nodes = [...sourceNodes, coreNode, ...serviceNodes, ...outputNodes];
-  const links = [
-    ...sourceNodes.map((node) => [node, coreNode, node.color]),
-    ...serviceNodes.map((node) => [coreNode, node, node.color]),
-    [coreNode, outputNodes[0], "#f0b64c"],
-    [outputNodes[0], outputNodes[1], outputNodes[1].color]
-  ];
-  const lines = links.map(([from, to, color]) => `
-    <line class="map-link" style="--link-color:${color}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
-  `).join("");
   const insights = [
     ["Highest risk", highestService ? `${highestService.service} ${highestService.maxRisk}` : "--"],
     ["Live sources", `${liveSources}/${sourceNodes.length}`],
@@ -1125,10 +1108,29 @@ function renderServiceMap() {
   ].map(([label, value]) => `
     <div class="map-insight"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
   `).join("");
-  const cards = nodes.map(renderMapNode).join("");
   qs("#service-map").innerHTML = `
-    <svg class="map-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>
-    ${cards}
+    <div class="map-layout">
+      <section class="map-lane map-lane-sources">
+        <div class="map-lane-heading"><span>Live Sources</span><strong>${liveSources}/${sourceNodes.length}</strong></div>
+        <div class="map-stack">${sourceNodes.map(renderMapNode).join("")}</div>
+      </section>
+      <section class="map-lane map-lane-core">
+        <div class="map-lane-heading"><span>Aggregation</span><strong>SQL</strong></div>
+        ${renderMapNode(coreNode)}
+        <div class="map-flow-card">
+          <strong>Signal join</strong>
+          <span>GitHub PRs are joined with Datadog, Sentry, and Linear signals before scoring.</span>
+        </div>
+      </section>
+      <section class="map-lane map-lane-services">
+        <div class="map-lane-heading"><span>Service Risk</span><strong>${serviceNodes.length}</strong></div>
+        <div class="map-service-grid">${serviceNodes.length ? serviceNodes.map(renderMapNode).join("") : emptyState("No live services discovered yet.")}</div>
+      </section>
+      <section class="map-lane map-lane-outcomes">
+        <div class="map-lane-heading"><span>Outcomes</span><strong>${blocked} blocked</strong></div>
+        <div class="map-stack">${outputNodes.map(renderMapNode).join("")}</div>
+      </section>
+    </div>
     <div class="map-insights">${insights}</div>
   `;
 }
