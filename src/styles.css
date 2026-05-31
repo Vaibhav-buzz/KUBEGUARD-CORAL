@@ -111,7 +111,6 @@ button {
 .profile-card,
 .secondary-button,
 .primary-button,
-.icon-button,
 .link-button {
   border: 1px solid transparent;
 }
@@ -305,7 +304,6 @@ button {
   font-size: 12px;
 }
 
-.icon-button,
 .ghost-action {
   display: grid;
   place-items: center;
@@ -314,25 +312,6 @@ button {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-}
-
-.with-badge {
-  position: relative;
-}
-
-.with-badge span {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  display: grid;
-  place-items: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--red);
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .toolbar {
@@ -363,8 +342,7 @@ select {
   padding: 0 14px;
 }
 
-.secondary-button:hover,
-.icon-button:hover {
+.secondary-button:hover {
   border-color: rgba(255, 255, 255, 0.34);
   background: rgba(255, 255, 255, 0.09);
 }
@@ -700,14 +678,14 @@ tbody tr:hover {
 }
 
 .level-medium,
-.status-review {
+.status-pending {
   border: 1px solid rgba(255, 209, 92, 0.45);
   background: rgba(255, 209, 92, 0.13);
   color: #ffd15c;
 }
 
 .level-low,
-.status-approved,
+.status-successful,
 .ready {
   border: 1px solid rgba(91, 216, 90, 0.42);
   background: rgba(91, 216, 90, 0.13);

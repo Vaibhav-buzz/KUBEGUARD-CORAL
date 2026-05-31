@@ -331,12 +331,6 @@ function levelForScore(score) {
   return "LOW";
 }
 
-function statusForScore(score) {
-  if (score >= 70) return "BLOCKED";
-  if (score >= 45) return "REVIEW";
-  return "REVIEW";
-}
-
 function riskColor(score) {
   if (score >= 70) return "#ff4b52";
   if (score >= 45) return "#ff7c35";
@@ -449,10 +443,14 @@ function isClosedPull(row) {
   return String(firstValue(row, ["state"], "")).toLowerCase() === "closed";
 }
 
-function statusForPull(row, score) {
-  if (isMergedPull(row)) return "APPROVED";
+function statusForPull(row) {
+  if (isMergedPull(row)) return "SUCCESSFUL";
   if (isClosedPull(row)) return "CLOSED";
-  return statusForScore(score);
+  return "PENDING";
+}
+
+function isGateBlocked(pr) {
+  return pr.status === "PENDING" && pr.score >= 70;
 }
 
 function normalizePull(row, index) {
@@ -490,7 +488,7 @@ function normalizePull(row, index) {
     service,
     score,
     level: levelForScore(score),
-    status: statusForPull(row, score),
+    status: statusForPull(row),
     updated: firstValue(row, ["updated_at", "updated"], "live"),
     state: firstValue(row, ["state"], "open"),
     merged: isMergedPull(row),
@@ -545,7 +543,7 @@ function distributions() {
 function renderMetrics() {
   const count = state.pulls.length;
   const average = count ? Math.round(state.pulls.reduce((sum, pr) => sum + pr.score, 0) / count) : 0;
-  const blocked = state.pulls.filter((pr) => pr.status === "BLOCKED").length;
+  const blocked = state.pulls.filter(isGateBlocked).length;
   const incidents = (state.datadog.incidents?.length || 0) + (state.sentry.issues?.length || 0);
   const monitors = state.datadog.monitors || [];
   const alertMonitors = monitors.filter((item) => String(firstValue(item, ["overall_state", "status", "state"], "")).toLowerCase().includes("alert")).length;
@@ -571,15 +569,13 @@ function renderMetrics() {
 }
 
 function renderShortcutCounts() {
-  const reviewRisk = state.pulls.filter((pr) => ["BLOCKED", "REVIEW"].includes(pr.status)).length;
-  const blocked = state.pulls.filter((pr) => pr.status === "BLOCKED").length;
+  const reviewRisk = state.pulls.filter((pr) => pr.status === "PENDING" && pr.score >= 45).length;
+  const blocked = state.pulls.filter(isGateBlocked).length;
   const incidents = liveIncidents().length;
-  const notificationCount = blocked + incidents;
   const targets = {
     "#shortcut-risk-count": reviewRisk,
     "#shortcut-blocked-count": blocked,
-    "#shortcut-incident-count": incidents,
-    "#notification-count": notificationCount
+    "#shortcut-incident-count": incidents
   };
   Object.entries(targets).forEach(([selector, value]) => {
     const el = qs(selector);
@@ -823,7 +819,7 @@ function renderServiceMap() {
   }));
   const outputNodes = [
     { id: "pulls", label: "Pull Requests", meta: `${state.pulls.length} live PRs`, x: 48, y: 74, type: "output" },
-    { id: "gate", label: "Policies & Gates", meta: `${state.pulls.filter((pr) => pr.status === "BLOCKED").length} blocked`, x: 72, y: 78, type: "output" }
+    { id: "gate", label: "Policies & Gates", meta: `${state.pulls.filter(isGateBlocked).length} blocked`, x: 72, y: 78, type: "output" }
   ];
   const coreNode = {
     id: "coral",
