@@ -114,9 +114,11 @@ function labelsFromRow(row) {
 }
 
 function serviceFromLabels(row) {
-  return labelsFromRow(row)
+  const labels = labelsFromRow(row);
+  const serviceLabel = labels
     .map((name) => String(name).match(/^service:(.+)$/i)?.[1])
-    .find(Boolean) || "";
+    .find(Boolean);
+  return serviceLabel || labels[0] || "";
 }
 
 function comparableValue(value) {
@@ -464,7 +466,7 @@ function normalizePull(row, index) {
   const rawBranch = firstValue(row, ["head__ref", "branch"], "unknown");
   const branch = displayBranchName(rawBranch);
   const target = firstValue(row, ["base__ref", "target"], "main");
-  const service = firstValue(row, ["service", "tag_service"], "") || serviceFromLabels(row) || state.config.service || inferService(`${title} ${branch}`);
+  const service = serviceFromLabels(row) || firstValue(row, ["service", "tag_service"], "") || state.config.service || inferService(`${title} ${branch}`);
   const prContext = {
     ...row,
     number: Number(firstValue(row, ["number", "pr_number"], index + 1)),
