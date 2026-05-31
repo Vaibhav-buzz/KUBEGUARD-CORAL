@@ -1,10 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$bundledNode = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+$cacheRoot = Join-Path $env:USERPROFILE ".cache"
+$bundledNode = Get-ChildItem -Path $cacheRoot -Recurse -Filter node.exe -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -like "*dependencies\node\bin\node.exe" } |
+  Select-Object -First 1 -ExpandProperty FullName
 $node = $null
 
-if (Test-Path $bundledNode) {
+if ($bundledNode -and (Test-Path $bundledNode)) {
   $node = $bundledNode
 } else {
   $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -14,7 +17,7 @@ if (Test-Path $bundledNode) {
 }
 
 if (-not $node) {
-  Write-Host "Node.js was not found. Install Node.js or run from Codex where the bundled runtime exists."
+  Write-Host "Node.js was not found. Install Node.js or run from the bundled desktop runtime."
   exit 1
 }
 

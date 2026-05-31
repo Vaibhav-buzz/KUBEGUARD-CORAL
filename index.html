@@ -34,10 +34,6 @@
             <span class="nav-icon">IN</span>
             <span>Incident Signals</span>
           </button>
-          <button class="nav-item" data-view="recommendations">
-            <span class="nav-icon">AI</span>
-            <span>AI Recommendations</span>
-          </button>
           <button class="nav-item" data-view="gates">
             <span class="nav-icon">GT</span>
             <span>Policies &amp; Gates</span>
@@ -98,7 +94,6 @@
               <span>12</span>
             </button>
             <button class="icon-button" aria-label="Help">?</button>
-            <button class="ai-button" id="ask-ai">Ask AI</button>
           </div>
         </header>
 
@@ -189,12 +184,6 @@
               <div class="service-bars" id="service-bars"></div>
             </section>
 
-            <section class="panel recommendation-panel">
-              <div class="panel-header">
-                <h2>AI Recommendation</h2>
-              </div>
-              <div id="recommendation-card" class="recommendation-card"></div>
-            </section>
           </div>
         </section>
 
@@ -273,7 +262,7 @@
                 <div class="workflow-step" data-step="comment">
                   <span>04</span>
                   <strong>Format comment</strong>
-                  <small>clear PR recommendation</small>
+                  <small>clear PR summary</small>
                 </div>
                 <div class="workflow-step" data-step="gate">
                   <span>05</span>
@@ -373,19 +362,6 @@
               <button class="secondary-button" data-action="sync">Refresh Incidents</button>
             </div>
             <div class="incident-board" id="incident-board"></div>
-          </section>
-        </section>
-
-        <section class="view-panel" data-panel="recommendations">
-          <section class="panel panel-full recommendation-panel">
-            <div class="panel-header">
-              <div>
-                <h2>AI Recommendations</h2>
-                <p>Actionable next steps derived from the Coral query result.</p>
-              </div>
-              <button class="primary-button" id="generate-recommendation">Generate Recommendation</button>
-            </div>
-            <div class="recommendation-grid" id="recommendation-grid"></div>
           </section>
         </section>
 

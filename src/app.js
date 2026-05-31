@@ -20,7 +20,6 @@ const titles = {
   pulls: "Pull Request Risk Queue",
   health: "Service Health",
   incidents: "Incident Signals",
-  recommendations: "AI Recommendations",
   gates: "Policies & Gates",
   analytics: "Trends & Analytics",
   map: "Service Map",
@@ -615,29 +614,6 @@ function renderSources() {
   renderLiveSummary();
 }
 
-function renderRecommendations() {
-  const pr = state.selectedPr;
-  if (!pr) {
-    qs("#recommendation-card").innerHTML = emptyState("Select or load a live PR to generate a recommendation.");
-    qs("#recommendation-grid").innerHTML = emptyState("No live PR recommendation data available.");
-    return;
-  }
-  const reasons = [
-    `${pr.lines} changed lines across ${pr.files} files`,
-    `${pr.sentry} Sentry issues`,
-    `${pr.datadog}% Datadog error rate`,
-    `${pr.linear} Linear bugs`
-  ];
-  const action = pr.score >= 70
-    ? "Block the merge until the service baseline is healthy."
-    : pr.score >= 45
-      ? "Hold for a low-traffic window or split the PR."
-      : "Proceed with normal monitoring.";
-  const card = `<h3>PR #${pr.number} (${escapeHtml(pr.title)}) is ${pr.level.toLowerCase()} risk.</h3><ul>${reasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="recommendation-action"><strong>Recommendation:</strong> ${action}</div>`;
-  qs("#recommendation-card").innerHTML = card;
-  qs("#recommendation-grid").innerHTML = `<article class="recommendation-card">${card}</article>`;
-}
-
 function renderCommentPreview() {
   const pr = state.selectedPr;
   if (!pr) {
@@ -769,7 +745,6 @@ function renderAll() {
   renderTrend();
   renderServiceBars();
   renderSources();
-  renderRecommendations();
   renderCommentPreview();
   renderHealthCards();
   renderIntegrations();
@@ -918,7 +893,6 @@ async function runAction(action) {
       addLog(state.selectedPr ? `Computed ${state.selectedPr.score}/100 from live rows.` : "No live PR selected.");
     } else if (action === "comment") {
       setWorkflowStep("comment");
-      renderRecommendations();
       renderCommentPreview();
       addLog("Rendered live PR comment preview.");
     } else if (action === "gate") {
@@ -955,7 +929,6 @@ function selectPr(number) {
   fillConfigForm();
   saveStoredConfig();
   addLog(`Selected live PR #${pr.number}.`);
-  renderRecommendations();
   renderCommentPreview();
 }
 
@@ -992,11 +965,6 @@ function bindEvents() {
     renderAll();
   });
   qs("#sync-now").addEventListener("click", () => void runAction("sync"));
-  qs("#ask-ai").addEventListener("click", () => {
-    setActiveView("recommendations");
-    void runAction("comment");
-  });
-  qs("#generate-recommendation").addEventListener("click", () => void runAction("comment"));
   qs("#clear-log").addEventListener("click", () => {
     state.log = [];
     renderLog();
