@@ -1,0 +1,10 @@
+{
+  "service": "payments",
+  "retryAttempts": 5,
+  "baseDelayMs": 250,
+  "maxDelayMs": 5000,
+  "gatewayTimeoutMs": 3000,
+  "idempotencyTtlMinutes": 1440,
+  "manualReviewThreshold": 250000
+}
+

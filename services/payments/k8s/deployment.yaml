@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  labels:
+    app: payments-api
+    service: payments
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+        service: payments
+      annotations:
+        ad.datadoghq.com/payments-api.logs: '[{"source":"nodejs","service":"payments"}]'
+    spec:
+      containers:
+        - name: payments-api
+          image: ghcr.io/vaibhav-buzz/kubeguard-payments:demo
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: payments-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 768Mi
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 20
+

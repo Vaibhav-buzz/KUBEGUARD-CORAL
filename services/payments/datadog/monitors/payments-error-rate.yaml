@@ -1,0 +1,11 @@
+name: payments error rate is elevated
+type: query alert
+query: avg(last_5m):sum:trace.web.request.errors{service:payments}.as_rate() > 0.05
+message: |
+  Payments error rate is above the deployment gate threshold.
+  Review the current PR, recent deploys, and open Sentry issues.
+tags:
+  - service:payments
+  - team:checkout
+  - gate:deployment-risk
+
