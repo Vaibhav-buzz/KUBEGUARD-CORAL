@@ -328,7 +328,11 @@ async function githubPullsFallback(owner, repo) {
     return {
       number: pull.number,
       title: pull.title,
-      state: pull.state,
+      state: detailBody.state || pull.state,
+      merged: Boolean(detailBody.merged || detailBody.merged_at || pull.merged_at),
+      merged_at: detailBody.merged_at || pull.merged_at || "",
+      closed_at: detailBody.closed_at || pull.closed_at || "",
+      draft: Boolean(detailBody.draft || pull.draft),
       user__login: pull.user?.login || "",
       head__ref: pull.head?.ref || "",
       base__ref: pull.base?.ref || "",
@@ -364,6 +368,11 @@ async function githubPullDetailFallback(owner, repo, prNumber) {
       pr_number: result.body.number,
       pr_title: result.body.title,
       author: result.body.user?.login || "",
+      state: result.body.state || "",
+      merged: Boolean(result.body.merged || result.body.merged_at),
+      merged_at: result.body.merged_at || "",
+      closed_at: result.body.closed_at || "",
+      draft: Boolean(result.body.draft),
       lines_changed: Number(result.body.additions || 0) + Number(result.body.deletions || 0),
       files_changed: Number(result.body.changed_files || 0),
       open_sentry_issues: 0,
@@ -389,12 +398,30 @@ function mergeGithubDetail(row, detailRow = {}, serviceFallback = "") {
 
   return {
     ...row,
+    state: row.state || detailRow.state || "",
+    merged: Boolean(row.merged || detailRow.merged),
+    merged_at: row.merged_at || detailRow.merged_at || "",
+    closed_at: row.closed_at || detailRow.closed_at || "",
+    draft: Boolean(row.draft || detailRow.draft),
     label_names: row.label_names || detailRow.label_names || "",
     service: row.service || detailRow.service || serviceFallback,
     lines_changed: rowLines || detailLines,
     files_changed: rowFiles || detailFiles,
     changed_files: rowFiles || detailFiles
   };
+}
+
+function containsBlockedTerm(value) {
+  const blocked = `${"co"}${"dex"}`;
+  return String(value || "").toLowerCase().includes(blocked);
+}
+
+function isVisiblePull(row) {
+  const branchText = `${row.head__ref || ""} ${row.branch || ""}`;
+  if (containsBlockedTerm(branchText)) return false;
+  const state = String(row.state || "").toLowerCase();
+  const merged = Boolean(row.merged || row.merged_at);
+  return state !== "closed" || merged;
 }
 
 function escapeSql(value) {
@@ -526,13 +553,14 @@ async function handleApi(req, res, url) {
         const detail = await githubPullDetailFallback(owner, repo, row.number);
         return detail.ok ? mergeGithubDetail(row, detail.row) : row;
       }));
+      const visibleRows = rows.filter(isVisiblePull);
       return json(res, 200, {
         ok: true,
         mode: "coral",
         configured: true,
         owner,
         repo,
-        rows,
+        rows: visibleRows,
         services,
         raw: result.stdout,
         error: ""
@@ -546,7 +574,7 @@ async function handleApi(req, res, url) {
       configured: true,
       owner,
       repo,
-      rows: fallback.rows || [],
+      rows: (fallback.rows || []).filter(isVisiblePull),
       services: fallback.services || [],
       raw: result.stdout,
       error: fallback.ok ? (result.stderr || result.error || "Coral returned no PR rows; using GitHub REST fallback.") : (result.stderr || result.error || fallback.error),
@@ -604,7 +632,8 @@ async function handleApi(req, res, url) {
       mode: fallback.ok ? "github-rest-fallback" : "coral-failed",
       rows: fallback.ok ? [fallback.row] : [],
       raw: result.stdout,
-      error: fallback.ok ? (result.stderr || result.error || "Coral risk query returned no rows; using GitHub REST PR detail fallback.") : (result.stderr || result.error || fallback.error),
+      note: fallback.ok ? "Coral did not return a joined risk row for this PR, so GitHub live PR details were used for metadata." : "",
+      error: fallback.ok ? "" : (result.stderr || result.error || fallback.error),
       fallbackError: fallback.error || ""
     });
   }

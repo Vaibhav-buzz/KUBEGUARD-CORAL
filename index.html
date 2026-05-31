@@ -54,17 +54,13 @@
             <span class="nav-icon">IG</span>
             <span>Integrations</span>
           </button>
-          <button class="nav-item" data-view="admin">
-            <span class="nav-icon">AD</span>
-            <span>Administration</span>
-          </button>
         </nav>
 
         <div class="shortcut-block">
           <p>Shortcuts</p>
-          <button class="shortcut" data-view="gates">Risk Center <span>5</span></button>
-          <button class="shortcut" data-view="pulls">Blocked PRs <span>5</span></button>
-          <button class="shortcut" data-view="incidents">Incidents <span>12</span></button>
+          <button class="shortcut" data-view="gates">Risk Center <span id="shortcut-risk-count">0</span></button>
+          <button class="shortcut" data-view="pulls">Blocked PRs <span id="shortcut-blocked-count">0</span></button>
+          <button class="shortcut" data-view="incidents">Incidents <span id="shortcut-incident-count">0</span></button>
           <button class="shortcut" data-view="analytics">Reports</button>
         </div>
 
@@ -91,7 +87,7 @@
             </label>
             <button class="icon-button with-badge" aria-label="Notifications">
               BL
-              <span>12</span>
+              <span id="notification-count">0</span>
             </button>
             <button class="icon-button" aria-label="Help">?</button>
           </div>
@@ -188,7 +184,7 @@
         </section>
 
         <section class="view-panel" data-panel="coral">
-          <div class="split-layout">
+          <div class="split-layout coral-layout">
             <section class="panel panel-large">
               <div class="panel-header">
                 <div>
@@ -296,13 +292,6 @@
               </div>
             </section>
 
-            <section class="panel">
-              <div class="panel-header">
-                <h2>SQL Preview</h2>
-                <span class="status-pill ready">Ready</span>
-              </div>
-              <pre class="code-preview" id="sql-preview"></pre>
-            </section>
           </div>
 
           <div class="split-layout lower">
@@ -435,34 +424,11 @@
           <div class="integration-grid" id="integration-grid"></div>
         </section>
 
-        <section class="view-panel" data-panel="admin">
-          <section class="panel panel-full">
-            <div class="panel-header">
-              <h2>Administration</h2>
-              <span class="status-pill ready">Configured</span>
-            </div>
-            <div class="admin-grid">
-              <div class="admin-card">
-                <h3>Secrets</h3>
-                <p>GitHub, Sentry, Datadog, Linear, and live repository settings are loaded from `.env`.</p>
-              </div>
-              <div class="admin-card">
-                <h3>Branch Protection</h3>
-                <p>The required `risk-score` check blocks merges when the gate fails.</p>
-              </div>
-              <div class="admin-card">
-                <h3>Audit Trail</h3>
-                <p>Every simulated action is recorded in the operation log.</p>
-              </div>
-            </div>
-          </section>
-        </section>
       </main>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./src/data.js"></script>
     <script src="./src/app.js"></script>
   </body>
 </html>

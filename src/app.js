@@ -1,5 +1,3 @@
-const seed = window.KubeGuardData || {};
-
 const state = {
   activeView: "overview",
   live: false,
@@ -24,8 +22,7 @@ const titles = {
   analytics: "Trends & Analytics",
   map: "Service Map",
   coral: "Coral Workspace",
-  integrations: "Integrations",
-  admin: "Administration"
+  integrations: "Integrations"
 };
 
 const sourceColors = {
@@ -285,7 +282,7 @@ function levelForScore(score) {
 function statusForScore(score) {
   if (score >= 70) return "BLOCKED";
   if (score >= 45) return "REVIEW";
-  return "APPROVED";
+  return "REVIEW";
 }
 
 function riskColor(score) {
@@ -385,6 +382,27 @@ function reportSummaryRisk() {
   return Math.max(0, ...(state.datadog.reports || []).map(metricRisk));
 }
 
+function displayBranchName(value) {
+  const clean = String(value || "unknown");
+  const parts = clean.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : clean;
+}
+
+function isMergedPull(row) {
+  return Boolean(firstValue(row, ["merged", "is_merged"], false)) ||
+    Boolean(firstValue(row, ["merged_at"], ""));
+}
+
+function isClosedPull(row) {
+  return String(firstValue(row, ["state"], "")).toLowerCase() === "closed";
+}
+
+function statusForPull(row, score) {
+  if (isMergedPull(row)) return "APPROVED";
+  if (isClosedPull(row)) return "CLOSED";
+  return statusForScore(score);
+}
+
 function normalizePull(row, index) {
   const additions = Number(firstValue(row, ["additions"], 0)) || 0;
   const deletions = Number(firstValue(row, ["deletions"], 0)) || 0;
@@ -395,7 +413,7 @@ function normalizePull(row, index) {
   const linear = Number(firstValue(row, ["open_linear_bugs"], 0)) || 0;
   const score = Number(firstValue(row, ["score"], calculateRisk(lines, files, sentry, datadog, linear)));
   const title = firstValue(row, ["title", "pr_title"], `Pull request ${index + 1}`);
-  const branch = firstValue(row, ["head__ref", "branch"], "unknown");
+  const branch = displayBranchName(firstValue(row, ["head__ref", "branch"], "unknown"));
   const target = firstValue(row, ["base__ref", "target"], "main");
   const service = firstValue(row, ["service", "tag_service"], "") || serviceFromLabels(row) || state.config.service || inferService(`${title} ${branch}`);
 
@@ -407,8 +425,11 @@ function normalizePull(row, index) {
     service,
     score,
     level: levelForScore(score),
-    status: statusForScore(score),
+    status: statusForPull(row, score),
     updated: firstValue(row, ["updated_at", "updated"], "live"),
+    state: firstValue(row, ["state"], "open"),
+    merged: isMergedPull(row),
+    mergedAt: firstValue(row, ["merged_at"], ""),
     lines,
     files,
     sentry,
@@ -482,6 +503,23 @@ function renderMetrics() {
       </div>
     </article>
   `).join("");
+}
+
+function renderShortcutCounts() {
+  const reviewRisk = state.pulls.filter((pr) => ["BLOCKED", "REVIEW"].includes(pr.status)).length;
+  const blocked = state.pulls.filter((pr) => pr.status === "BLOCKED").length;
+  const incidents = liveIncidents().length;
+  const notificationCount = blocked + incidents;
+  const targets = {
+    "#shortcut-risk-count": reviewRisk,
+    "#shortcut-blocked-count": blocked,
+    "#shortcut-incident-count": incidents,
+    "#notification-count": notificationCount
+  };
+  Object.entries(targets).forEach(([selector, value]) => {
+    const el = qs(selector);
+    if (el) el.textContent = String(value);
+  });
 }
 
 function renderPrTables() {
@@ -695,18 +733,58 @@ function renderAnalytics() {
 }
 
 function renderServiceMap() {
-  const groups = Object.keys(sourceGroups());
-  const nodes = ["coral", ...groups].slice(0, 8);
-  if (!nodes.length) {
+  const groups = sourceGroups();
+  const sourceNames = Object.keys(groups).filter((name) => name !== "coral").slice(0, 5);
+  if (!sourceNames.length && !state.pulls.length) {
     qs("#service-map").innerHTML = emptyState("No live source topology available.");
     return;
   }
-  qs("#service-map").innerHTML = nodes.map((name, index) => {
-    const x = 10 + (index % 4) * 22;
-    const y = 18 + Math.floor(index / 4) * 34;
-    const count = name === "coral" ? state.tables.length : (sourceGroups()[name] || []).length;
-    return `<div class="map-node" style="left:${x}%;top:${y}%"><strong>${escapeHtml(name)}</strong><span>${count} live tables</span></div>`;
-  }).join("");
+  const sourceNodes = sourceNames.map((name, index) => ({
+    id: name,
+    label: name,
+    meta: `${groups[name].length} live tables`,
+    x: 12,
+    y: 18 + index * 14,
+    type: "source"
+  }));
+  const serviceNames = deriveDatadogServiceNames().slice(0, 4);
+  const serviceNodes = serviceNames.map((name, index) => ({
+    id: `service-${name}`,
+    label: name,
+    meta: `${relatedMonitors(name).length || state.datadog.monitors?.length || 0} monitors`,
+    x: 72,
+    y: 20 + index * 16,
+    type: "service"
+  }));
+  const outputNodes = [
+    { id: "pulls", label: "Pull Requests", meta: `${state.pulls.length} live PRs`, x: 48, y: 74, type: "output" },
+    { id: "gate", label: "Policies & Gates", meta: `${state.pulls.filter((pr) => pr.status === "BLOCKED").length} blocked`, x: 72, y: 78, type: "output" }
+  ];
+  const coreNode = {
+    id: "coral",
+    label: "Coral SQL",
+    meta: `${state.tables.length} discovered tables`,
+    x: 43,
+    y: 42,
+    type: "core"
+  };
+  const nodes = [...sourceNodes, coreNode, ...serviceNodes, ...outputNodes];
+  const links = [
+    ...sourceNodes.map((node) => [node, coreNode]),
+    ...serviceNodes.map((node) => [coreNode, node]),
+    [coreNode, outputNodes[0]],
+    [outputNodes[0], outputNodes[1]]
+  ];
+  const lines = links.map(([from, to]) => `
+    <line class="map-link" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
+  `).join("");
+  const cards = nodes.map((node) => `
+    <div class="map-node map-node-${node.type}" style="left:${node.x}%;top:${node.y}%">
+      <strong>${escapeHtml(node.label)}</strong>
+      <span>${escapeHtml(node.meta)}</span>
+    </div>
+  `).join("");
+  qs("#service-map").innerHTML = `<svg class="map-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${cards}`;
 }
 
 function renderLiveSummary() {
@@ -746,6 +824,7 @@ function renderAll() {
   renderServiceBars();
   renderSources();
   renderCommentPreview();
+  renderShortcutCounts();
   renderHealthCards();
   renderIntegrations();
   renderAnalytics();
@@ -868,6 +947,7 @@ async function runLiveRiskQuery() {
   }
   setWorkflowStep("score");
   addLog(`Ran risk query for PR #${state.config.prNumber} via ${result.mode || "Coral"}.`);
+  if (result.note) addLog(result.note);
   if (result.error) addLog(result.error);
   renderAll();
 }
@@ -974,7 +1054,6 @@ function bindEvents() {
 function init() {
   loadStoredConfig();
   fillConfigForm();
-  qs("#sql-preview").textContent = seed.sql || "";
   setLiveStatus("static", "Waiting for live data", "Start the live server, then load Coral data.");
   renderAll();
   renderLog();

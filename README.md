@@ -67,7 +67,7 @@ The live server exposes:
 - `/api/live/github/pulls` for live pull requests from `REPO_OWNER` and `REPO_NAME`.
 - `/api/live/risk` for the project risk SQL query.
 
-If the live server is not running, the UI safely falls back to static demo data.
+If the live server is not running, the UI shows empty live states and asks you to connect the local server.
 
 ## Project Structure
 
@@ -77,7 +77,6 @@ If the live server is not running, the UI safely falls back to static demo data.
 |-- package.json
 |-- src/
 |   |-- app.js
-|   |-- data.js
 |   `-- styles.css
 |-- coral/
 |   |-- queries/
