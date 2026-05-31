@@ -506,7 +506,7 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/live/linear") {
-    const issues = await coralSql("SELECT * FROM linear.issues LIMIT 20");
+    const issues = await coralSql("SELECT * FROM linear.issues LIMIT 100");
     return json(res, 200, {
       ok: issues.ok,
       issues: issues.data,
@@ -610,7 +610,7 @@ async function handleApi(req, res, url) {
       .replaceAll("{{owner}}", escapeSql(owner))
       .replaceAll("{{repo}}", escapeSql(repo))
       .replaceAll("{{pr_number}}", String(parsedPrNumber))
-      .replaceAll("{{service}}", escapeSql(service));
+      .replaceAll("{{service}}", escapeSql(service).toLowerCase());
     const result = await coralSql(sql);
     if (result.ok && Array.isArray(result.data) && result.data.length) {
       const detail = await githubPullDetailFallback(owner, repo, parsedPrNumber);
