@@ -497,6 +497,10 @@ select {
   min-height: 300px;
 }
 
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
 .panel-full {
   min-height: 620px;
 }
@@ -815,8 +819,15 @@ tbody tr:hover {
 }
 
 .service-row {
-  grid-template-columns: 86px minmax(120px, 1fr) 34px;
+  grid-template-columns: minmax(140px, 0.24fr) minmax(180px, 1fr) 44px;
   min-height: 38px;
+}
+
+.service-row strong:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bar-track {
