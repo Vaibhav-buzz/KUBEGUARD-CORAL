@@ -34,5 +34,4 @@ WHERE
   p.owner = '{{owner}}'
   AND p.repo = '{{repo}}'
   AND p.number = {{pr_number}}
-  AND p.state = 'open'
 GROUP BY 1, 2, 3, 4, 5;
