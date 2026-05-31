@@ -7,7 +7,7 @@ const state = {
   log: [],
   tables: [],
   pulls: [],
-  datadog: { hosts: [], monitors: [], metricNames: [], services: [], incidents: [], errors: [] },
+  datadog: { hosts: [], monitors: [], metricNames: [], services: [], incidents: [], reports: [], range: null, errors: [] },
   sentry: { issues: [], error: "" },
   linear: { issues: [], error: "" },
   serviceOptions: [],
@@ -104,6 +104,10 @@ function queryFromConfig(extra = {}) {
   return params.toString();
 }
 
+function selectedTimeRange() {
+  return qs("#time-range")?.value || "Last 24 hours";
+}
+
 function labelsFromRow(row) {
   const raw = firstValue(row, ["label_names", "labels"], "");
   if (Array.isArray(raw)) return raw.map((item) => typeof item === "string" ? item : item?.name).filter(Boolean);
@@ -119,6 +123,26 @@ function serviceFromLabels(row) {
     .find(Boolean) || "";
 }
 
+function tagsFromValue(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || "")
+    .split(/[,|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function serviceFromDatadogRow(row) {
+  const tagMatch = tagsFromValue(firstValue(row, ["tags", "tag_set"], ""))
+    .map((tag) => tag.match(/^service:(.+)$/i)?.[1])
+    .find(Boolean);
+  if (tagMatch) return tagMatch;
+  const queryMatch = String(firstValue(row, ["query"], "")).match(/service:([a-z0-9_.-]+)/i)?.[1];
+  if (queryMatch) return queryMatch;
+  const name = String(firstValue(row, ["name", "title"], "")).toLowerCase();
+  return [...state.serviceOptions, ...state.pulls.map((pr) => pr.service), state.config.service]
+    .find((service) => service && name.includes(String(service).toLowerCase())) || "";
+}
+
 function addOptionValue(values, value) {
   const clean = String(value || "").trim();
   if (clean && !values.includes(clean)) values.push(clean);
@@ -131,6 +155,8 @@ function deriveServiceOptions() {
   (state.datadog.services || []).forEach((service) => {
     addOptionValue(values, firstValue(service, ["service", "name", "env", "tag_service"], ""));
   });
+  (state.datadog.monitors || []).forEach((monitor) => addOptionValue(values, serviceFromDatadogRow(monitor)));
+  (state.datadog.incidents || []).forEach((incident) => addOptionValue(values, firstValue(incident, ["service", "customer_impact_scope"], "")));
   (state.sentry.issues || []).forEach((issue) => {
     addOptionValue(values, firstValue(issue, ["project", "project__slug", "project_slug"], ""));
   });
@@ -268,6 +294,96 @@ function riskColor(score) {
   if (score >= 45) return "#ff7c35";
   if (score >= 20) return "#ffd15c";
   return "#5bd85a";
+}
+
+function datadogStatusRisk(status) {
+  const value = String(status || "").toLowerCase();
+  if (value.includes("alert")) return 80;
+  if (value.includes("warn")) return 55;
+  if (value.includes("no data")) return 30;
+  if (value.includes("ok")) return 0;
+  return 15;
+}
+
+function metricRisk(report) {
+  const latest = Number(report?.latest);
+  if (!Number.isFinite(latest)) return 0;
+  if (report.key === "memory_usable") {
+    if (latest < 10) return 75;
+    if (latest < 20) return 45;
+    return 0;
+  }
+  if (report.key === "disk_in_use" || report.key === "cpu_user") {
+    if (latest > 90) return 75;
+    if (latest > 70) return 45;
+    return 0;
+  }
+  if (report.key === "load_norm") {
+    if (latest > 1.5) return 70;
+    if (latest > 1) return 40;
+    return 0;
+  }
+  return 0;
+}
+
+function formatMetricValue(value, unit = "") {
+  if (value === null || value === undefined || value === "") return "--";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  const precision = Math.abs(number) >= 10 ? 1 : 2;
+  return `${number.toFixed(precision)}${unit}`;
+}
+
+function sparkline(report, options = {}) {
+  const points = Array.isArray(report?.points) ? report.points : [];
+  if (!points.length) return `<div class="mini-chart empty">No Datadog points</div>`;
+  const width = options.width || 260;
+  const height = options.height || 72;
+  const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const step = points.length > 1 ? width / (points.length - 1) : width;
+  const path = points.map((point, index) => {
+    const x = index * step;
+    const y = height - ((Number(point.value) - min) / span) * (height - 12) - 6;
+    return `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  const fillPath = `${path} L${width} ${height} L0 ${height} Z`;
+  const color = riskColor(metricRisk(report));
+  return `
+    <svg class="mini-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(report.label)} Datadog trend">
+      <path d="${fillPath}" fill="${color}" opacity="0.16"></path>
+      <path d="${path}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
+}
+
+function relatedMonitors(service) {
+  const selected = String(service || "").toLowerCase();
+  return (state.datadog.monitors || []).filter((monitor) => {
+    if (!selected) return true;
+    const monitorService = serviceFromDatadogRow(monitor).toLowerCase();
+    if (monitorService === selected) return true;
+    return `${firstValue(monitor, ["name"], "")} ${firstValue(monitor, ["query"], "")} ${firstValue(monitor, ["tags"], "")}`
+      .toLowerCase()
+      .includes(selected);
+  });
+}
+
+function deriveDatadogServiceNames() {
+  const values = [];
+  (state.datadog.services || []).forEach((service) => addOptionValue(values, firstValue(service, ["service", "name", "env", "tag_service"], "")));
+  (state.datadog.monitors || []).forEach((monitor) => addOptionValue(values, serviceFromDatadogRow(monitor)));
+  (state.datadog.incidents || []).forEach((incident) => addOptionValue(values, firstValue(incident, ["service", "customer_impact_scope"], "")));
+  state.pulls.forEach((pr) => addOptionValue(values, pr.service));
+  addOptionValue(values, state.config.service);
+  if (!values.length && state.datadog.hosts?.length) addOptionValue(values, "infrastructure");
+  return values.sort((a, b) => a.localeCompare(b));
+}
+
+function reportSummaryRisk() {
+  return Math.max(0, ...(state.datadog.reports || []).map(metricRisk));
 }
 
 function normalizePull(row, index) {
@@ -424,7 +540,18 @@ function liveIncidents() {
     updated: firstValue(item, ["last_seen", "updated_at"], "live"),
     source: "Sentry"
   }));
-  return [...datadog, ...sentry];
+  const monitors = (state.datadog.monitors || [])
+    .filter((item) => !String(firstValue(item, ["status", "overall_state", "state"], "")).toLowerCase().includes("ok"))
+    .map((item, index) => ({
+      id: firstValue(item, ["id"], `MON-${index + 1}`),
+      title: firstValue(item, ["name"], "Datadog monitor"),
+      service: serviceFromDatadogRow(item) || state.config.service || "infrastructure",
+      priority: firstValue(item, ["status", "overall_state", "state"], "Monitor"),
+      state: firstValue(item, ["status", "overall_state", "state"], "live"),
+      updated: firstValue(item, ["modified", "created"], "live"),
+      source: "Datadog Monitor"
+    }));
+  return [...datadog, ...monitors, ...sentry];
 }
 
 function renderIncidents() {
@@ -446,7 +573,18 @@ function renderIncidents() {
 function renderTrend(target = "#trend-chart") {
   const el = qs(target);
   if (!el) return;
-  el.innerHTML = emptyState("No live historical risk trend source is configured yet.");
+  const report = (state.datadog.reports || []).find((item) => Array.isArray(item.points) && item.points.length);
+  if (!report) {
+    el.innerHTML = emptyState("No live Datadog metric points returned yet.");
+    return;
+  }
+  el.innerHTML = `
+    <div class="chart-heading">
+      <div><strong>${escapeHtml(report.label)}</strong><span>Datadog live metric, ${escapeHtml(state.datadog.range?.label || selectedTimeRange())}</span></div>
+      <strong>${formatMetricValue(report.latest, report.unit)}</strong>
+    </div>
+    ${sparkline(report, { width: 520, height: 150 })}
+  `;
 }
 
 function renderServiceBars() {
@@ -520,16 +658,51 @@ function renderCommentPreview() {
 }
 
 function renderHealthCards() {
-  const services = state.datadog.services || [];
+  const services = deriveDatadogServiceNames();
   const hosts = state.datadog.hosts || [];
-  const serviceCards = services.map((service, index) => {
-    const name = firstValue(service, ["service", "name", "env"], `service-${index + 1}`);
-    const relatedRisk = state.pulls.find((pr) => pr.service === name)?.score || 0;
+  const reports = state.datadog.reports || [];
+  const metricCards = reports.map((report) => `
+    <article class="metric-report">
+      <header><span>${escapeHtml(report.label)}</span><strong>${formatMetricValue(report.latest, report.unit)}</strong></header>
+      ${sparkline(report)}
+      <footer><span>avg ${formatMetricValue(report.avg, report.unit)}</span><span>${report.seriesCount || 0} series</span></footer>
+    </article>
+  `).join("");
+  const serviceCards = services.map((name) => {
+    const monitors = relatedMonitors(name);
+    const monitorRisk = Math.max(0, ...monitors.map((monitor) => datadogStatusRisk(firstValue(monitor, ["status", "overall_state", "state"], ""))));
+    const relatedRisk = Math.max(state.pulls.find((pr) => pr.service === name)?.score || 0, monitorRisk, reportSummaryRisk());
+    const status = monitors.find((monitor) => datadogStatusRisk(firstValue(monitor, ["status", "overall_state", "state"], "")) > 0);
     return `
-      <article class="health-card"><div class="health-header"><h3>${escapeHtml(name)}</h3><span class="level-pill level-${levelForScore(relatedRisk).toLowerCase()}">${levelForScore(relatedRisk)}</span></div><p>Live Datadog service row.</p><div class="health-meter"><span style="--width:${Math.max(8, 100 - relatedRisk)}%;--bar-color:${riskColor(relatedRisk)}"></span></div><div class="health-stats"><div><span>Risk</span><strong>${relatedRisk}</strong></div><div><span>Hosts</span><strong>${hosts.length}</strong></div><div><span>Monitors</span><strong>${state.datadog.monitors?.length || 0}</strong></div></div></article>
+      <article class="health-card">
+        <div class="health-header">
+          <h3>${escapeHtml(name)}</h3>
+          <span class="level-pill level-${levelForScore(relatedRisk).toLowerCase()}">${levelForScore(relatedRisk)}</span>
+        </div>
+        <p>${status ? escapeHtml(firstValue(status, ["name"], "Datadog monitor needs attention.")) : "Live Datadog baseline is available for this service."}</p>
+        <div class="health-meter"><span style="--width:${Math.max(8, 100 - relatedRisk)}%;--bar-color:${riskColor(relatedRisk)}"></span></div>
+        <div class="health-stats">
+          <div><span>Health risk</span><strong>${relatedRisk}</strong></div>
+          <div><span>Hosts</span><strong>${hosts.length}</strong></div>
+          <div><span>Monitors</span><strong>${monitors.length || state.datadog.monitors?.length || 0}</strong></div>
+        </div>
+      </article>
     `;
   }).join("");
-  qs("#service-health-grid").innerHTML = serviceCards || emptyState("No live Datadog services returned.");
+  const reportCard = `
+    <article class="health-card datadog-report-card">
+      <div class="health-header">
+        <h3>Datadog Live Reports</h3>
+        <span class="status-pill ready">${reports.filter((item) => item.points?.length).length} metrics</span>
+      </div>
+      <p>Live timeseries fetched from Datadog Metrics Query API for ${escapeHtml(state.datadog.range?.label || selectedTimeRange())}.</p>
+      <div class="metric-report-grid">${metricCards || emptyState("No Datadog metric points returned.")}</div>
+    </article>
+  `;
+  const errors = (state.datadog.errors || []).length
+    ? `<article class="health-card datadog-error-card"><h3>Datadog Notes</h3><p>${escapeHtml((state.datadog.errors || []).slice(0, 2).join(" "))}</p></article>`
+    : "";
+  qs("#service-health-grid").innerHTML = reportCard + serviceCards + errors;
 }
 
 function renderIntegrations() {
@@ -565,7 +738,7 @@ function renderLiveSummary() {
   qs("#profile-team").textContent = state.config.repo || "Waiting for repo";
   qs("#live-coral-status").textContent = state.live ? "Connected" : "Waiting";
   qs("#live-table-count").textContent = String(state.tables.length);
-  const datadogRows = (state.datadog.hosts?.length || 0) + (state.datadog.monitors?.length || 0) + (state.datadog.metricNames?.length || 0) + (state.datadog.services?.length || 0) + (state.datadog.incidents?.length || 0);
+  const datadogRows = (state.datadog.hosts?.length || 0) + (state.datadog.monitors?.length || 0) + (state.datadog.metricNames?.length || 0) + (state.datadog.services?.length || 0) + (state.datadog.incidents?.length || 0) + (state.datadog.reports?.length || 0);
   qs("#live-datadog-count").textContent = `${datadogRows} rows`;
   qs("#live-pr-count").textContent = String(state.pulls.length);
 }
@@ -581,7 +754,8 @@ function renderLiveDatadog() {
     ["Monitors", state.datadog.monitors?.length || 0],
     ["Metric names", state.datadog.metricNames?.length || 0],
     ["Services", state.datadog.services?.length || 0],
-    ["Incidents", state.datadog.incidents?.length || 0]
+    ["Incidents", state.datadog.incidents?.length || 0],
+    ["Metric reports", state.datadog.reports?.filter((item) => item.points?.length).length || 0]
   ];
   qs("#live-datadog-list").innerHTML = items.map(([label, value]) => `<div><strong>${label}</strong><span>${value}</span></div>`).join("");
 }
@@ -636,7 +810,7 @@ async function loadLiveData() {
   const [status, tables, datadog, sentry, linear, pulls] = await Promise.allSettled([
     fetchJson("/api/live/status"),
     fetchJson("/api/live/tables"),
-    fetchJson("/api/live/datadog"),
+    fetchJson(`/api/live/datadog?range=${encodeURIComponent(selectedTimeRange())}`),
     fetchJson("/api/live/sentry"),
     fetchJson("/api/live/linear"),
     fetchJson(`/api/live/github/pulls?${queryFromConfig()}`)
@@ -804,7 +978,10 @@ function bindEvents() {
     renderPrTables();
     renderIncidents();
   });
-  qs("#time-range").addEventListener("change", () => toast("Time range will apply when a historical live source is connected."));
+  qs("#time-range").addEventListener("change", () => {
+    addLog(`Datadog interval changed to ${selectedTimeRange()}.`);
+    void loadLiveData();
+  });
   qs("#live-pr-number").addEventListener("change", (event) => {
     if (event.target.value) selectPr(event.target.value);
     else readConfigFromForm();

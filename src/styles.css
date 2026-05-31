@@ -1164,6 +1164,73 @@ tbody tr:hover {
   min-height: 220px;
 }
 
+.datadog-report-card {
+  grid-column: 1 / -1;
+}
+
+.datadog-error-card {
+  border-color: rgba(255, 157, 36, 0.35);
+}
+
+.metric-report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.metric-report {
+  min-height: 154px;
+  padding: 12px;
+  border: 1px solid rgba(150, 171, 205, 0.14);
+  border-radius: var(--radius);
+  background: rgba(4, 10, 18, 0.42);
+}
+
+.metric-report header,
+.metric-report footer,
+.chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.metric-report header span,
+.metric-report footer,
+.chart-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-report header strong,
+.chart-heading strong {
+  color: var(--text);
+}
+
+.mini-chart {
+  width: 100%;
+  height: 72px;
+  margin-top: 10px;
+}
+
+.mini-chart.empty {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px dashed rgba(150, 171, 205, 0.22);
+  border-radius: var(--radius);
+}
+
+.chart-heading {
+  margin-bottom: 16px;
+}
+
+.chart-heading div {
+  display: grid;
+  gap: 3px;
+}
+
 .health-header,
 .integration-header {
   display: flex;
@@ -1375,6 +1442,7 @@ tbody tr:hover {
   .live-config,
   .live-summary-grid,
   .live-data-grid,
+  .metric-report-grid,
   .workflow-steps {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
@@ -1410,6 +1478,7 @@ tbody tr:hover {
   .live-config,
   .live-summary-grid,
   .live-data-grid,
+  .metric-report-grid,
   .workflow-steps,
   .service-health-grid,
   .integration-grid,

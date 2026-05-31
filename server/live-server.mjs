@@ -160,6 +160,119 @@ async function requestJson(url, headers = {}) {
   };
 }
 
+function datadogHeaders() {
+  const apiKey = process.env.DD_API_KEY || process.env.DATADOG_API_KEY;
+  const appKey = process.env.DD_APPLICATION_KEY || process.env.DATADOG_APPLICATION_KEY;
+  if (!apiKey || !appKey) return null;
+  return {
+    "DD-API-KEY": apiKey,
+    "DD-APPLICATION-KEY": appKey
+  };
+}
+
+function datadogApiUrl(pathname, params = {}) {
+  const site = String(process.env.DD_SITE || "datadoghq.com")
+    .replace(/^https?:\/\//, "")
+    .replace(/^api\./, "")
+    .replace(/\/$/, "");
+  const url = new URL(pathname, `https://api.${site}`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  });
+  return url.toString();
+}
+
+function summarizeDatadogSeries(definition, body) {
+  const series = Array.isArray(body?.series) ? body.series : [];
+  const points = series.flatMap((item) => Array.isArray(item.pointlist)
+    ? item.pointlist.map((point) => ({
+      ts: Number(point?.[0] || 0),
+      value: Number(point?.[1])
+    }))
+    : [])
+    .filter((point) => Number.isFinite(point.value))
+    .map((point) => ({
+      ...point,
+      value: definition.scale ? point.value * definition.scale : point.value
+    }))
+    .sort((a, b) => a.ts - b.ts);
+
+  const values = points.map((point) => point.value);
+  const latest = values.length ? values[values.length - 1] : null;
+  const min = values.length ? Math.min(...values) : null;
+  const max = values.length ? Math.max(...values) : null;
+  const avg = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+
+  return {
+    key: definition.key,
+    label: definition.label,
+    query: definition.query,
+    unit: definition.unit,
+    latest,
+    min,
+    max,
+    avg,
+    points: points.slice(-60),
+    seriesCount: series.length
+  };
+}
+
+function datadogWindow(range) {
+  const value = String(range || "Last 24 hours").toLowerCase();
+  if (value.includes("30")) return { label: "Last 30 days", seconds: 30 * 24 * 60 * 60, rollup: 4 * 60 * 60 };
+  if (value.includes("7")) return { label: "Last 7 days", seconds: 7 * 24 * 60 * 60, rollup: 60 * 60 };
+  if (value.includes("1 hour") || value === "1h") return { label: "Last 1 hour", seconds: 60 * 60, rollup: 60 };
+  return { label: "Last 24 hours", seconds: 24 * 60 * 60, rollup: 10 * 60 };
+}
+
+async function datadogMetricReports(range) {
+  const headers = datadogHeaders();
+  if (!headers) {
+    return {
+      reports: [],
+      range: datadogWindow(range),
+      errors: ["DD_API_KEY and DD_APPLICATION_KEY are required for live Datadog metric reports."]
+    };
+  }
+
+  const window = datadogWindow(range);
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - window.seconds;
+  const definitions = [
+    { key: "cpu_user", label: "CPU user", query: "avg:system.cpu.user{*}", unit: "%" },
+    { key: "memory_usable", label: "Memory usable", query: "avg:system.mem.pct_usable{*}", unit: "%" },
+    { key: "disk_in_use", label: "Disk in use", query: "avg:system.disk.in_use{*}", unit: "%", scale: 100 },
+    { key: "load_norm", label: "Normalized load", query: "avg:system.load.norm.1{*}", unit: "" }
+  ];
+
+  const results = await Promise.all(definitions.map(async (definition) => {
+    const query = `${definition.query}.rollup(avg, ${window.rollup})`;
+    const result = await requestJson(datadogApiUrl("/api/v1/query", {
+      from,
+      to,
+      query
+    }), headers);
+    if (!result.ok) {
+      return {
+        ok: false,
+        report: { ...definition, points: [], latest: null, min: null, max: null, avg: null, seriesCount: 0 },
+        error: `${definition.label}: ${result.error || `Datadog returned ${result.status}`}`
+      };
+    }
+    return {
+      ok: true,
+      report: summarizeDatadogSeries({ ...definition, query }, result.body),
+      error: ""
+    };
+  }));
+
+  return {
+    reports: results.map((item) => item.report),
+    range: { ...window, from, to },
+    errors: results.filter((item) => !item.ok).map((item) => item.error)
+  };
+}
+
 function githubHeaders() {
   const headers = {};
   if (process.env.GITHUB_TOKEN) {
@@ -330,23 +443,29 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/live/datadog") {
-    const [hosts, monitors, metrics, services, incidents] = await Promise.all([
+    const range = url.searchParams.get("range") || "Last 24 hours";
+    const [hosts, monitors, metrics, services, incidents, metricReports] = await Promise.all([
       coralSql("SELECT * FROM datadog.hosts LIMIT 5"),
       coralSql("SELECT * FROM datadog.monitors LIMIT 5"),
       coralSql("SELECT * FROM datadog.metric_names LIMIT 20"),
       coralSql("SELECT * FROM datadog.services LIMIT 10"),
-      coralSql("SELECT * FROM datadog.incidents LIMIT 20")
+      coralSql("SELECT * FROM datadog.incidents LIMIT 20"),
+      datadogMetricReports(range)
     ]);
     return json(res, 200, {
-      ok: [hosts, monitors, metrics, services, incidents].some((item) => item.ok),
+      ok: [hosts, monitors, metrics, services, incidents].some((item) => item.ok) || metricReports.reports.length > 0,
       hosts: hosts.data,
       monitors: monitors.data,
       metricNames: metrics.data,
       services: services.data,
       incidents: incidents.data,
+      reports: metricReports.reports,
+      range: metricReports.range,
       errors: [hosts, monitors, metrics, services, incidents]
         .filter((item) => !item.ok)
         .map((item) => item.stderr || item.error)
+        .concat(metricReports.errors || [])
+        .filter(Boolean)
     });
   }
 
