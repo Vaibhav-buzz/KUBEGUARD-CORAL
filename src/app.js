@@ -825,9 +825,69 @@ function renderHealthCards() {
 
 function renderIntegrations() {
   const groups = sourceGroups();
-  qs("#integration-grid").innerHTML = Object.entries(groups).map(([schema, tables]) => `
-    <article class="integration-card"><div class="integration-header"><h3>${escapeHtml(schema)}</h3><span class="status-pill ready">Live</span></div><p>${tables.length} tables available through Coral.</p><footer><span>${escapeHtml(schema)}.*</span><button class="secondary-button" data-action="discover">Refresh</button></footer></article>
-  `).join("") || emptyState("No live integrations discovered.");
+  const datadogRows = (state.datadog.hosts?.length || 0)
+    + (state.datadog.monitors?.length || 0)
+    + (state.datadog.metricNames?.length || 0)
+    + (state.datadog.services?.length || 0)
+    + (state.datadog.incidents?.length || 0)
+    + (state.datadog.reports?.length || 0);
+  const cards = [
+    {
+      schema: "github",
+      label: "GitHub",
+      rows: state.pulls.length,
+      tables: groups.github || [],
+      live: state.pulls.length > 0 || Boolean(groups.github?.length),
+      detail: `${state.pulls.length} pull requests loaded from the configured repository.`,
+      empty: "No PR rows returned yet. Check repo access or create a PR."
+    },
+    {
+      schema: "datadog",
+      label: "Datadog",
+      rows: datadogRows,
+      tables: groups.datadog || [],
+      live: datadogRows > 0 || Boolean(groups.datadog?.length),
+      detail: `${datadogRows} live rows across hosts, monitors, metrics, services, incidents, and reports.`,
+      empty: (state.datadog.errors || [])[0] || "No Datadog rows returned yet."
+    },
+    {
+      schema: "sentry",
+      label: "Sentry",
+      rows: state.sentry.issues?.length || 0,
+      tables: groups.sentry || [],
+      live: state.sentry.ok === true || Boolean(groups.sentry?.length),
+      detail: `${state.sentry.issues?.length || 0} live issues returned from Sentry.`,
+      empty: state.sentry.error || "Sentry is not returning live rows yet."
+    },
+    {
+      schema: "linear",
+      label: "Linear",
+      rows: state.linear.issues?.length || 0,
+      tables: groups.linear || [],
+      live: state.linear.ok === true || Boolean(groups.linear?.length),
+      detail: `${state.linear.issues?.length || 0} live issues returned from Linear.`,
+      empty: state.linear.error || "Linear is not returning live rows yet."
+    }
+  ];
+
+  qs("#integration-grid").innerHTML = cards.map((card) => {
+    const color = sourceColors[card.schema] || "#33a3ff";
+    return `
+      <article class="integration-card ${card.live ? "integration-live" : "integration-waiting"}">
+        <div class="integration-header">
+          <h3>${escapeHtml(card.label)}</h3>
+          <span class="status-pill ${card.live ? "ready" : "status-closed"}">${card.live ? "Live" : "Waiting"}</span>
+        </div>
+        <p>${escapeHtml(card.live ? card.detail : card.empty)}</p>
+        <div class="integration-stats">
+          <div><span>Rows</span><strong>${card.rows}</strong></div>
+          <div><span>Tables</span><strong>${card.tables.length}</strong></div>
+        </div>
+        <div class="source-health" style="--source-color:${color}">${card.live ? "Connected through Coral" : "Needs source sync"}</div>
+        <footer><span>${escapeHtml(card.schema)}.*</span><button class="secondary-button" data-action="sync">Refresh</button></footer>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderAnalytics() {
