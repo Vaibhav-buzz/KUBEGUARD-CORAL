@@ -28,8 +28,17 @@ LEFT JOIN datadog.monitors d
   )
 LEFT JOIN linear.issues l
   ON l.state_name != 'Done'
+  AND l.priority > 0
   AND l.priority <= 2
-  AND l.label_names LIKE '%{{service}}%'
+  AND (
+    LOWER(COALESCE(l.label_names, '')) LIKE '%service:{{service}}%'
+    OR LOWER(COALESCE(l.label_names, '')) LIKE '%{{service}}%'
+    OR LOWER(COALESCE(l.label_names, '')) LIKE '%pr:{{pr_number}}%'
+    OR LOWER(COALESCE(l.title, '')) LIKE '%#{{pr_number}}%'
+    OR LOWER(COALESCE(l.description, '')) LIKE '%#{{pr_number}}%'
+    OR LOWER(COALESCE(l.title, '')) LIKE '%{{service}}%'
+    OR LOWER(COALESCE(l.description, '')) LIKE '%{{service}}%'
+  )
 WHERE
   p.owner = '{{owner}}'
   AND p.repo = '{{repo}}'

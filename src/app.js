@@ -119,6 +119,56 @@ function serviceFromLabels(row) {
     .find(Boolean) || "";
 }
 
+function comparableValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function compactValue(value) {
+  return comparableValue(value).replace(/[^a-z0-9]+/g, "");
+}
+
+function labelMatchesService(label, service) {
+  if (!service) return false;
+  const rawLabel = comparableValue(label);
+  const labelService = rawLabel.replace(/^service:/, "");
+  return compactValue(labelService) === compactValue(service);
+}
+
+function isActiveLinearIssue(issue) {
+  const stateName = comparableValue(firstValue(issue, ["state_name", "state", "status"], ""));
+  return !["done", "closed", "completed", "canceled", "cancelled"].includes(stateName);
+}
+
+function isHighPriorityLinearIssue(issue) {
+  const priority = Number(firstValue(issue, ["priority"], 0));
+  return Number.isFinite(priority) && priority > 0 && priority <= 2;
+}
+
+function linearIssueMatchesPull(issue, pr) {
+  if (!isActiveLinearIssue(issue) || !isHighPriorityLinearIssue(issue)) return false;
+  const labels = labelsFromRow(issue);
+  const service = firstValue(pr, ["service"], "");
+  if (labels.some((label) => labelMatchesService(label, service))) return true;
+
+  const prNumber = String(firstValue(pr, ["number", "pr_number"], "")).trim();
+  if (prNumber && labels.some((label) => compactValue(label) === compactValue(`pr:${prNumber}`))) return true;
+
+  const text = comparableValue([
+    firstValue(issue, ["title"], ""),
+    firstValue(issue, ["description"], ""),
+    firstValue(issue, ["url"], ""),
+    labels.join(" ")
+  ].join(" "));
+  if (prNumber && (text.includes(`#${prNumber}`) || text.includes(`pr:${prNumber}`) || text.includes(`pr ${prNumber}`))) return true;
+
+  const branch = comparableValue(firstValue(pr, ["rawBranch", "branch", "head__ref"], ""));
+  return branch && branch !== "unknown" && text.includes(branch);
+}
+
+function matchingLinearIssueCount(pr) {
+  return (state.linear.issues || []).filter((issue) => linearIssueMatchesPull(issue, pr)).length;
+}
+
 function tagsFromValue(value) {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   return String(value || "")
@@ -157,8 +207,10 @@ function deriveServiceOptions() {
     addOptionValue(values, firstValue(issue, ["project", "project__slug", "project_slug"], ""));
   });
   (state.linear.issues || []).forEach((issue) => {
-    const labels = firstValue(issue, ["label_names", "label__names", "labels"], "");
-    String(labels).split(/[,|;]/).forEach((label) => addOptionValue(values, String(label).replace(/^service:/i, "")));
+    labelsFromRow(issue)
+      .map((label) => String(label).match(/^service:(.+)$/i)?.[1])
+      .filter(Boolean)
+      .forEach((service) => addOptionValue(values, service));
   });
   return values.sort((a, b) => a.localeCompare(b));
 }
@@ -410,16 +462,29 @@ function normalizePull(row, index) {
   const files = Number(firstValue(row, ["changed_files", "files_changed"], 0)) || 0;
   const sentry = Number(firstValue(row, ["open_sentry_issues"], 0)) || 0;
   const datadog = Number(firstValue(row, ["avg_error_rate_pct"], 0)) || 0;
-  const linear = Number(firstValue(row, ["open_linear_bugs"], 0)) || 0;
-  const score = Number(firstValue(row, ["score"], calculateRisk(lines, files, sentry, datadog, linear)));
   const title = firstValue(row, ["title", "pr_title"], `Pull request ${index + 1}`);
-  const branch = displayBranchName(firstValue(row, ["head__ref", "branch"], "unknown"));
+  const rawBranch = firstValue(row, ["head__ref", "branch"], "unknown");
+  const branch = displayBranchName(rawBranch);
   const target = firstValue(row, ["base__ref", "target"], "main");
   const service = firstValue(row, ["service", "tag_service"], "") || serviceFromLabels(row) || state.config.service || inferService(`${title} ${branch}`);
-
-  return {
+  const prContext = {
+    ...row,
     number: Number(firstValue(row, ["number", "pr_number"], index + 1)),
     title,
+    rawBranch,
+    branch,
+    target,
+    service
+  };
+  const coralLinear = Number(firstValue(row, ["open_linear_bugs"], 0)) || 0;
+  const liveLinear = matchingLinearIssueCount(prContext);
+  const linear = Math.max(coralLinear, liveLinear);
+  const score = calculateRisk(lines, files, sentry, datadog, linear);
+
+  return {
+    number: prContext.number,
+    title,
+    rawBranch,
     branch,
     target,
     service,
@@ -665,7 +730,7 @@ function renderCommentPreview() {
       <tr><td>PR size</td><td>${pr.lines} lines, ${pr.files} files</td><td>25</td></tr>
       <tr><td>Sentry</td><td>${pr.sentry} issues</td><td>35</td></tr>
       <tr><td>Datadog</td><td>${pr.datadog}% error rate</td><td>25</td></tr>
-      <tr><td>Linear</td><td>${pr.linear} bugs</td><td>15</td></tr>
+      <tr><td>Linear</td><td>${pr.linear} issues</td><td>15</td></tr>
     </tbody></table>
     <p><strong>Powered by Coral:</strong> live data joined from connected tools.</p>
   `;
@@ -919,15 +984,21 @@ async function discoverLiveTables() {
 async function loadLivePulls() {
   readConfigFromForm();
   if (!state.config.owner || !state.config.repo) throw new Error("Enter GitHub owner and repository.");
-  const pulls = await fetchJson(`/api/live/github/pulls?${queryFromConfig()}`);
-  if (!pulls.ok) throw new Error(pulls.error || pulls.message || "Failed to load GitHub PRs.");
-  state.pulls = rowsFromPayload(pulls).map(normalizePull);
-  state.serviceOptions = [...new Set([...(state.serviceOptions || []), ...(pulls.services || [])])];
+  const [linear, pulls] = await Promise.allSettled([
+    fetchJson("/api/live/linear"),
+    fetchJson(`/api/live/github/pulls?${queryFromConfig()}`)
+  ]);
+  if (linear.status === "fulfilled" && linear.value.ok) state.linear = linear.value;
+  else addLog(linear.status === "fulfilled" ? (linear.value.error || "Linear returned no rows.") : linear.reason.message);
+  if (pulls.status !== "fulfilled") throw pulls.reason;
+  if (!pulls.value.ok) throw new Error(pulls.value.error || pulls.value.message || "Failed to load GitHub PRs.");
+  state.pulls = rowsFromPayload(pulls.value).map(normalizePull);
+  state.serviceOptions = [...new Set([...(state.serviceOptions || []), ...(pulls.value.services || [])])];
   applyPullSelection();
   fillConfigForm();
   saveStoredConfig();
   setWorkflowStep("join");
-  addLog(`Loaded ${state.pulls.length} GitHub PRs via ${pulls.mode || "live API"}.`);
+  addLog(`Loaded ${state.pulls.length} GitHub PRs via ${pulls.value.mode || "live API"}.`);
   renderAll();
 }
 

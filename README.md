@@ -59,6 +59,19 @@ Inside the UI, open **Coral Workspace** and use:
 - **Service** is populated from `service:*` GitHub labels plus live service hints from Datadog, Sentry, and Linear.
 - **Run Coral JOIN** to execute `coral/queries/risk_score.sql` for the selected PR.
 
+### Dynamic Linear Scenario
+
+To make Linear values appear in the PR queue without seeded data:
+
+1. Add a GitHub label to the PR in this format: `service:payments`, `service:auth`, or any real service name.
+2. In Linear, create an issue with state not done or closed.
+3. Set Linear priority to Urgent or High.
+4. Add a Linear label that matches the PR service, preferably `service:payments`.
+5. For PR-specific matching, also add `pr:<number>` as a Linear label or mention `#<number>` / the PR branch name in the Linear title or description.
+6. Click **Sync sources** or **Load Live Data** in the dashboard.
+
+The dashboard counts matching Linear issues from live `linear.issues` rows and recomputes the PR risk score.
+
 The live server exposes:
 
 - `/api/live/status` for Coral CLI status.
