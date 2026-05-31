@@ -466,7 +466,7 @@ function normalizePull(row, index) {
   const rawBranch = firstValue(row, ["head__ref", "branch"], "unknown");
   const branch = displayBranchName(rawBranch);
   const target = firstValue(row, ["base__ref", "target"], "main");
-  const service = serviceFromLabels(row) || firstValue(row, ["service", "tag_service"], "") || state.config.service || inferService(`${title} ${branch}`);
+  const service = serviceFromLabels(row) || "unknown";
   const prContext = {
     ...row,
     number: Number(firstValue(row, ["number", "pr_number"], index + 1)),
@@ -513,16 +513,6 @@ function applyPullSelection() {
   } else {
     state.config.prNumber = "";
   }
-}
-
-function inferService(text) {
-  const value = String(text).toLowerCase();
-  if (value.includes("payment")) return "payments";
-  if (value.includes("auth")) return "auth";
-  if (value.includes("order")) return "orders";
-  if (value.includes("search")) return "search";
-  if (value.includes("web") || value.includes("ui")) return "web";
-  return state.config.service || "unknown";
 }
 
 function distributions() {
@@ -1110,7 +1100,6 @@ function bindEvents() {
   });
   qs("#live-service").addEventListener("change", () => {
     readConfigFromForm();
-    if (state.selectedPr) state.selectedPr = { ...state.selectedPr, service: state.config.service || state.selectedPr.service };
     renderAll();
   });
   qs("#sync-now").addEventListener("click", () => void runAction("sync"));
